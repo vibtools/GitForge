@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+/* Eye-friendly comfortable dark theme baseline */
+:root {
+  color-scheme: dark;
+}
+
+body {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #030712; /* Deep comfortable slate/gray background */
+  color: #cbd5e1; /* Soft slate-300: clear, readable, zero harsh glare */
+}
+
+/* Soften all heading and bold text to prevent intense white glow */
+h1, h2, h3, h4, h5, h6 {
+  color: #e2e8f0; /* Soft slate-200 instead of blinding stark white */
+}
+
+/* Smooth sleek custom scrollbars without harsh borders */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #334155 #0b0f19;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: #090d16;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* Smooth muted text utilities */
+.text-smooth-heading {
+  color: #e2e8f0;
+}
+
+.text-smooth-body {
+  color: #cbd5e1;
+}
+
+.text-smooth-muted {
+  color: #94a3b8;
+}
+
+.text-smooth-subtle {
+  color: #64748b;
+}
+

@@ -1,0 +1,6 @@
+{
+  "name": "Cloudflare Bulk Pages Builder",
+  "description": "Multi-account Cloudflare Pages deployment manager with GitHub repository sync, custom subdomain automation, and DNS CNAME provisioner.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
