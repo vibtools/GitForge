@@ -80,6 +80,7 @@ Deploying static websites and Jamstack applications to hundreds of Cloudflare ac
 | **Branch & Commit Sync** | Git Integration | Fetches the latest Git SHA, commit author, and message directly from GitHub REST API. |
 | **Build Concurrency Pool** | Engine | Dynamic pool slider (1 to 10 workers) preventing memory overload during massive batch runs. |
 | **Build Timeout Guard** | Stability | Automated watchdog timer that terminates frozen child processes after a defined threshold. |
+| **Cloudflare OAuth 2.0 Auth App** | Integration | 1-Click popup authorization code flow for zero-paste fleet account connection & auto-provisioning. |
 | **Custom Domain Provisioning** | Networking | Auto-binds wildcard or index-based subdomains (`sub-{index}.domain.com`) to Cloudflare Pages. |
 | **Emergency Global Kill Switch**| Reliability | Immediate emergency termination of all active build processes across every project. |
 | **Encrypted Token Vault** | Security | Token masking and unmasking toggles with secure database storage. |
@@ -293,6 +294,12 @@ CREATE TABLE IF NOT EXISTS app_audit_logs (
 - `POST /api/auth/register` — Register a standard user or initial administrator.
 - `POST /api/auth/login` — Authenticate user and issue 32-byte session token.
 - `POST /api/auth/logout` — Terminate and delete session token.
+- `GET /api/auth/cloudflare/config-status` — Public verification check if Cloudflare OAuth App is configured.
+- `GET /api/auth/cloudflare/url` — Generates cryptographically signed Cloudflare OAuth 2.0 authorization URL.
+- `GET /api/auth/cloudflare/callback` — OAuth 2.0 callback handler, exchanges code, retrieves accounts, and syncs fleet.
+- `GET /api/auth/cloudflare/zones` — Query live Cloudflare Zones for connected accounts with plan metadata.
+- `POST /api/auth/cloudflare/dns/auto-provision` — 1-Click automated DNS CNAME creation, wildcard & subdomains routing, and Cloudflare Pages custom domain binding.
+- `GET /api/auth/cloudflare/dns/verify-status` — Live DNS propagation query and Cloudflare SSL edge verification.
 
 ### Projects & Deployments Endpoints
 
@@ -333,6 +340,7 @@ CREATE TABLE IF NOT EXISTS app_audit_logs (
 - `GET /api/admin/settings` — Retrieve system configuration settings.
 - `POST /api/admin/settings` — Update concurrency limits, timeouts, and webhooks.
 - `POST /api/admin/settings/test-webhook` — Dispatch a test ping to configured Webhook URL.
+- `POST /api/admin/cloudflare/oauth/test` — Live verification of Cloudflare OAuth App Client ID & Secret credentials.
 - `GET /api/admin/db-stats` — Exact row counts and connection pool metrics.
 - `POST /api/admin/db-cleanup` — Execute database cleanup and normalize orphaned states.
 - `GET /api/admin/export-system` — Download full system JSON backup file.
@@ -432,35 +440,54 @@ npm run dev
 
 ## 11. Production Deployment Guide
 
-### Option 1: Docker Deployment
+### Option 1: Coolify 1-Click Quick Deploy (Self-Hosted PaaS)
 
-```dockerfile
-FROM node:20-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
+1. In your **Coolify Dashboard**, click **+ Create New Resource** > **Service** or **Application (Git / Docker Compose)**.
+2. If using **Docker Compose**: Paste the contents of `docker-compose.yml` into Coolify.
+3. If connecting via **GitHub**: Point to this repository, select **Docker Compose** or **Dockerfile**.
+4. Configure the Environment Variables in Coolify:
+   ```env
+   DATABASE_URL=postgresql://username:password@ep-example.neon.tech/neondb?sslmode=require
+   APP_URL=https://your-gitforge-domain.com
+   PORT=3000
+   NODE_ENV=production
+   ```
+5. Click **Deploy**. Coolify will build the image, attach SSL via Traefik automatically, and run healthchecks.
 
-FROM node:20-alpine AS runner
-WORKDIR /app
-ENV NODE_ENV=production
-COPY package*.json ./
-RUN npm ci --only=production
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/server ./server
-COPY --from=builder /app/server.ts ./server.ts
+---
 
-EXPOSE 3000
-CMD ["npm", "start"]
+### Option 2: Docker Compose (Quick Local / VPS Deployment)
+
+**With External / Neon PostgreSQL:**
+```bash
+# 1. Clone & enter repository
+git clone https://github.com/your-username/gitforge.git
+cd gitforge
+
+# 2. Copy and configure .env
+cp .env.example .env
+# Set your DATABASE_URL and APP_URL in .env
+
+# 3. Start GitForge container
+docker compose up -d --build
+
+# 4. View logs and health
+docker compose logs -f
 ```
 
-### Option 2: Cloud Run / VPS / Railway / Render
+**Full Standalone (GitForge + Local PostgreSQL container):**
+```bash
+docker compose -f docker-compose.selfhosted.yml up -d --build
+```
 
-1. Set `DATABASE_URL` in your platform's environment variables dashboard.
+---
+
+### Option 3: Standard Cloud Platforms (Cloud Run, Railway, Render, VPS)
+
+1. Set `DATABASE_URL`, `APP_URL`, and `PORT=3000` in your environment dashboard.
 2. Build command: `npm run build`
-3. Start command: `npm start` (`tsx server.ts` or `node server.js`)
-4. Port: `3000`
+3. Start command: `npm start`
+4. Expose Port: `3000`
 
 ---
 

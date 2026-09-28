@@ -31,6 +31,12 @@
 4. **Immutable Audit Trail**:
    - Every administrative operation (emergency abort, settings update, user creation, session revocation) produces an append-only entry in `app_audit_logs`.
 
+5. **Cloudflare OAuth 2.0 Security & State Integrity**:
+   - State Parameter: Cryptographically signed using HMAC-SHA256 with the OAuth Client Secret.
+   - Nonce & Expiration: Strict 15-minute validity window with random 8-byte nonces to prevent replay, state tampering, and CSRF attacks.
+   - Cross-Window Communication: `window.postMessage` dispatch and listeners enforce strict `window.location.origin` verification, blocking unauthorized cross-origin frames.
+   - Reverse Proxy Protection: Explicit `trust proxy` configuration with sanitized multi-hop header parsing.
+
 ---
 
 ## 3. Reporting a Vulnerability

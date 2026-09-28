@@ -4,6 +4,26 @@ export interface User {
   name: string;
 }
 
+export interface ProjectScanReport {
+  language: string;
+  framework: string;
+  architecture: 'Frontend SPA' | 'Full-Stack' | 'Static Site' | 'Backend API';
+  is_dynamic: boolean;
+  page_nature: string;
+  cloudflare_compatible: boolean;
+  cloudflare_status: string;
+  recommended_build_command: string;
+  recommended_output_dir: string;
+  detected_env_vars: string[];
+  detected_env_defaults?: Record<string, string>;
+  detected_databases: string[];
+  commit_sha: string;
+  commit_message: string;
+  commit_author?: string;
+  total_files?: number;
+  scanned_at: string;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -17,7 +37,9 @@ export interface Project {
   subdomain_pattern: string;
   latest_commit_sha?: string;
   latest_commit_message?: string;
-  status: 'created' | 'idle' | 'building' | 'completed' | 'partial_error';
+  status: 'created' | 'idle' | 'building' | 'completed' | 'partial_error' | 'failed';
+  env_vars?: Record<string, string>;
+  scan_report?: ProjectScanReport;
   created_at: string;
   updated_at: string;
   account_count?: number;

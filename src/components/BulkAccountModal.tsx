@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Plus, Upload, CheckCircle2, Shield, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Plus, Upload, CheckCircle2, Shield, AlertCircle, Cloud, Sparkles, ExternalLink, RefreshCw } from 'lucide-react';
 import { Project } from '../types';
 
 interface BulkAccountModalProps {
@@ -15,7 +15,7 @@ export const BulkAccountModal: React.FC<BulkAccountModalProps> = ({
   onClose,
   onAccountsAdded,
 }) => {
-  const [mode, setMode] = useState<'bulk' | 'single'>('bulk');
+  const [mode, setMode] = useState<'oauth' | 'bulk' | 'single'>('oauth');
   const [bulkText, setBulkText] = useState('');
   const [singleAlias, setSingleAlias] = useState('');
   const [singleAccountId, setSingleAccountId] = useState('');
@@ -26,6 +26,81 @@ export const BulkAccountModal: React.FC<BulkAccountModalProps> = ({
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ valid: boolean; message: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Cloudflare OAuth State
+  const [isConnectingOAuth, setIsConnectingOAuth] = useState(false);
+  const [isOAuthConfigured, setIsOAuthConfigured] = useState<boolean | null>(null);
+
+  // Check if admin has configured Cloudflare OAuth App
+  useEffect(() => {
+    if (isOpen) {
+      fetch('/api/auth/cloudflare/config-status')
+        .then((r) => r.json())
+        .then((data) => {
+          setIsOAuthConfigured(Boolean(data.configured));
+          if (!data.configured) {
+            setMode('bulk');
+          }
+        })
+        .catch(() => {
+          setIsOAuthConfigured(false);
+        });
+    }
+  }, [isOpen]);
+
+  // Listen for OAuth postMessage from popup window
+  useEffect(() => {
+    const handleOAuthMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === 'CF_OAUTH_SUCCESS') {
+        setIsConnectingOAuth(false);
+        onAccountsAdded();
+        onClose();
+      } else if (event.data?.type === 'CF_OAUTH_ERROR') {
+        setIsConnectingOAuth(false);
+        setError(event.data.error || 'Cloudflare authorization failed.');
+      }
+    };
+
+    window.addEventListener('message', handleOAuthMessage);
+    return () => window.removeEventListener('message', handleOAuthMessage);
+  }, [onAccountsAdded, onClose]);
+
+  const handleConnectCloudflareOAuth = async () => {
+    setError(null);
+    setIsConnectingOAuth(true);
+    try {
+      if (!project) return;
+      const token = localStorage.getItem('cf_bulk_token') || '';
+      const res = await fetch(`/api/auth/cloudflare/url?project_id=${project.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(
+          errData.error || 'Cloudflare OAuth App is not configured. Administrator must set OAuth Client ID and Secret in /vcon Settings.'
+        );
+      }
+
+      const data = await res.json();
+      if (!data.url) throw new Error('Authorization URL missing');
+
+      // Open OAuth provider directly in popup window
+      const popup = window.open(
+        data.url,
+        'cf_oauth_popup',
+        'width=600,height=750,menubar=no,status=no,toolbar=no,scrollbars=yes'
+      );
+
+      if (!popup) {
+        throw new Error('Popup blocked by browser. Please enable popups for this site to connect Cloudflare.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to open Cloudflare authorization popup');
+      setIsConnectingOAuth(false);
+    }
+  };
 
   const handleTestConnection = async () => {
     setTestResult(null);
@@ -240,8 +315,19 @@ export const BulkAccountModal: React.FC<BulkAccountModalProps> = ({
         <div className="px-3 pt-2 flex items-center justify-between border-b border-slate-800 pb-1.5">
           <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded border border-slate-800">
             <button
+              onClick={() => setMode('oauth')}
+              className={`px-2 py-0.5 text-[11px] font-medium rounded transition flex items-center gap-1 cursor-pointer ${
+                mode === 'oauth'
+                  ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Cloud className="w-3 h-3 text-orange-400" />
+              <span>1-Click OAuth</span>
+            </button>
+            <button
               onClick={() => setMode('bulk')}
-              className={`px-2 py-0.5 text-[11px] font-medium rounded transition ${
+              className={`px-2 py-0.5 text-[11px] font-medium rounded transition cursor-pointer ${
                 mode === 'bulk'
                   ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
                   : 'text-slate-400 hover:text-slate-200'
@@ -251,7 +337,7 @@ export const BulkAccountModal: React.FC<BulkAccountModalProps> = ({
             </button>
             <button
               onClick={() => setMode('single')}
-              className={`px-2 py-0.5 text-[11px] font-medium rounded transition ${
+              className={`px-2 py-0.5 text-[11px] font-medium rounded transition cursor-pointer ${
                 mode === 'single'
                   ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
                   : 'text-slate-400 hover:text-slate-200'
@@ -271,7 +357,69 @@ export const BulkAccountModal: React.FC<BulkAccountModalProps> = ({
             </div>
           )}
 
-          {mode === 'bulk' ? (
+          {mode === 'oauth' ? (
+            <div className="space-y-3 py-1">
+              <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 text-center space-y-2">
+                <div className="w-10 h-10 rounded-full bg-orange-600/15 border border-orange-500/30 flex items-center justify-center text-orange-400 mx-auto">
+                  <Cloud className="w-5 h-5" />
+                </div>
+
+                <div className="space-y-0.5">
+                  <div className="text-xs font-bold text-slate-100">
+                    Connect Cloudflare Account
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Authenticate via official Cloudflare authorization popup. Grants secure Pages &amp; DNS management access automatically.
+                  </p>
+                </div>
+
+                {isOAuthConfigured === false && (
+                  <div className="p-2 bg-amber-950/40 border border-amber-800/60 rounded text-amber-300 text-[10px] text-left flex items-start gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-semibold">OAuth App Not Configured:</span> The administrator has not configured Cloudflare Auth App credentials in <strong>vCon Settings</strong> yet. You can use <strong>Bulk Paste</strong> or <strong>Single</strong> token.
+                    </div>
+                  </div>
+                )}
+
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={handleConnectCloudflareOAuth}
+                    disabled={isConnectingOAuth || isOAuthConfigured === false}
+                    className="w-full py-2 px-3 text-xs font-semibold text-white bg-orange-600 hover:bg-orange-500 disabled:opacity-50 rounded transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer active:scale-98"
+                  >
+                    {isConnectingOAuth ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Awaiting Cloudflare Authorization...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Connect with Cloudflare (Open Popup)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center text-[10px] text-slate-500 px-1 font-mono">
+                <span>Official Cloudflare OAuth 2.0 Handshake</span>
+                <span className="text-emerald-400">Zero-Paste Setup</span>
+              </div>
+
+              <div className="flex justify-end pt-1 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-2.5 py-1 text-xs text-slate-400 hover:text-white bg-slate-800 rounded transition cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          ) : mode === 'bulk' ? (
             <div className="space-y-2">
               <div>
                 <label className="block text-slate-400 mb-0.5 text-[11px]">

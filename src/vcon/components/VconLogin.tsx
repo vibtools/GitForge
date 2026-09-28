@@ -17,16 +17,23 @@ export const VconLogin: React.FC<VconLoginProps> = ({ onLoginSuccess, onExit }) 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !password) {
+      setError('Please enter both admin email and password.');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const res = await vconApi.loginAdmin({ email, password });
+      const res = await vconApi.loginAdmin({ email: cleanEmail, password });
       if (res.token) {
         localStorage.setItem('cf_bulk_token', res.token);
       }
       onLoginSuccess(res.user);
     } catch (err: any) {
-      setError(err.message || 'Authentication failed: Invalid credentials or insufficient privileges.');
+      setError(err.message || 'Invalid administrator credentials.');
     } finally {
       setLoading(false);
     }

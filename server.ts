@@ -5,25 +5,59 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 import { pool, initDb, logAudit } from './server/db.js';
-import { runBulkBuild, isProjectBuilding, cancelProjectBuild, runWithConcurrency, fetchGitHubRepoDetails, sanitizePagesProjectName, verifyCloudflareCredentials } from './server/builder.js';
+import { runBulkBuild, isProjectBuilding, cancelProjectBuild, runWithConcurrency, fetchGitHubRepoDetails, sanitizePagesProjectName, verifyCloudflareCredentials, scanRepository } from './server/builder.js';
 import { hashPassword, verifyPassword, createSession, validateSession, requireAuth, invalidateSessionCache } from './server/auth.js';
 import { adminRouter } from './server/admin.js';
+import { cfOAuthRouter } from './server/cf-oauth.js';
 import { generatePresignedUrl, uploadFileToS3 } from './server/s3-utils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 const isDev = process.env.NODE_ENV !== 'production';
 
 // Enable Gzip/Deflate response compression for ultra-fast payload delivery
-app.use(compression());
+app.use(compression() as any);
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
 // Mount vCon Admin Control APIs
 app.use('/api/admin', adminRouter);
+
+// Mount Cloudflare OAuth 2.0 Auth Router
+app.use('/api/auth/cloudflare', cfOAuthRouter);
+
+// Production / Docker / Coolify Health Check Endpoint
+app.get('/api/health', async (_req, res) => {
+  let dbStatus = 'disconnected';
+  let dbLatencyMs = -1;
+  const start = Date.now();
+  try {
+    const dbTest = await pool.query('SELECT 1 as alive');
+    if (dbTest?.rows?.[0]?.alive === 1) {
+      dbStatus = 'connected';
+      dbLatencyMs = Date.now() - start;
+    }
+  } catch (err: any) {
+    dbStatus = `error: ${err?.message || 'DB query failed'}`;
+  }
+
+  const isHealthy = dbStatus === 'connected';
+  res.status(isHealthy ? 200 : 503).json({
+    status: isHealthy ? 'healthy' : 'degraded',
+    service: 'gitforge',
+    uptime: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+    database: {
+      status: dbStatus,
+      latency_ms: dbLatencyMs,
+    },
+    version: '1.0.0',
+  });
+});
 
 // S3 File Access Gateway: Generates pre-signed URL & 302 redirects user to secure temporary S3 / Backblaze URL
 const handleFileRedirect = async (req: express.Request, res: express.Response) => {
@@ -145,9 +179,27 @@ app.get('/api/auth/me', async (req, res) => {
 // Auth: Register (Create initial admin or new user in Neon DB)
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { email, password, name } = req.body;
-    if (!email || !password) {
+    const { email, password, confirmPassword, name } = req.body || {};
+    if (!email || typeof email !== 'string' || !password || typeof password !== 'string') {
       return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    if (confirmPassword !== undefined && password !== confirmPassword) {
+      return res.status(400).json({ error: 'Passwords do not match' });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(normalizedEmail) || normalizedEmail.length > 254) {
+      return res.status(400).json({ error: 'Please enter a valid email address' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+
+    if (password.length > 128) {
+      return res.status(400).json({ error: 'Password is too long (maximum 128 characters)' });
     }
 
     // Check if public registration is enabled (initial setup is always permitted)
@@ -161,15 +213,14 @@ app.post('/api/auth/register', async (req, res) => {
       }
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
     const existing = await pool.query('SELECT id FROM app_users WHERE email = $1', [normalizedEmail]);
     if (existing.rows.length > 0) {
-      return res.status(409).json({ error: 'User already exists with this email' });
+      return res.status(409).json({ error: 'An account already exists with this email address' });
     }
 
     const { hash, salt } = hashPassword(password);
     const userId = 'usr_' + crypto.randomBytes(8).toString('hex');
-    const userName = (name || normalizedEmail.split('@')[0]).trim();
+    const userName = (typeof name === 'string' && name.trim() ? name.trim() : normalizedEmail.split('@')[0]).slice(0, 100);
 
     await pool.query(
       `INSERT INTO app_users (id, email, password_hash, salt, name) VALUES ($1, $2, $3, $4, $5)`,
@@ -180,18 +231,18 @@ app.post('/api/auth/register', async (req, res) => {
     res.status(201).json({
       success: true,
       token,
-      user: { id: userId, email: normalizedEmail, name: userName },
+      user: { id: userId, email: normalizedEmail, name: userName, role: totalUsers === 0 ? 'admin' : 'user' },
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message || 'Registration failed' });
   }
 });
 
 // Auth: Login
 app.post('/api/auth/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) {
+    const { email, password } = req.body || {};
+    if (!email || typeof email !== 'string' || !password || typeof password !== 'string') {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
@@ -211,10 +262,10 @@ app.post('/api/auth/login', async (req, res) => {
     res.json({
       success: true,
       token,
-      user: { id: user.id, email: user.email, name: user.name },
+      user: { id: user.id, email: user.email, name: user.name, role: user.role || 'user' },
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message || 'Authentication failed' });
   }
 });
 
@@ -365,48 +416,55 @@ app.get('/api/projects', requireAuth, async (_req, res) => {
   }
 });
 
-// POST /api/projects - Create project
+// POST /api/projects - Create project (Step 01: Name and Description)
 app.post('/api/projects', requireAuth, async (req, res) => {
   try {
     const {
       name,
-      description,
-      github_repo,
+      description = '',
+      github_repo = '',
       github_branch = 'main',
-      github_token,
+      github_token = '',
       build_command = 'npm run build',
       output_dir = 'dist',
-      root_domain,
+      root_domain = '',
       subdomain_pattern = 'site-{index}',
-    } = req.body;
+    } = req.body || {};
 
-    if (!name || !github_repo || !root_domain) {
-      return res.status(400).json({ error: 'Name, GitHub Repo, and Root Domain are required' });
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Project Name is required' });
     }
 
     const id = 'proj_' + Math.random().toString(36).substring(2, 11);
+    const cleanName = name.trim();
+    const cleanRepo = (github_repo || '').trim();
+    const cleanRootDomain = (root_domain || '').trim().toLowerCase().replace(/^https?:\/\//, '');
 
-    // Fetch commit info
-    const commit = await fetchGitHubRepoDetails(github_repo, github_branch, github_token);
+    // Fetch commit info if repo provided
+    let commit = { sha: '', message: '' };
+    if (cleanRepo) {
+      commit = await fetchGitHubRepoDetails(cleanRepo, github_branch, github_token);
+    }
 
     const result = await pool.query(
       `INSERT INTO cf_projects 
        (id, name, description, github_repo, github_branch, github_token, build_command, output_dir, root_domain, subdomain_pattern, latest_commit_sha, latest_commit_message, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'created')
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING *`,
       [
         id,
-        name.trim(),
-        description || '',
-        github_repo.trim(),
-        github_branch.trim(),
+        cleanName,
+        description.trim(),
+        cleanRepo,
+        (github_branch || 'main').trim(),
         github_token || '',
         build_command.trim(),
         output_dir.trim(),
-        root_domain.trim().toLowerCase().replace(/^https?:\/\//, ''),
+        cleanRootDomain,
         subdomain_pattern,
         commit.sha,
         commit.message,
+        cleanRepo ? 'idle' : 'created',
       ]
     );
 
@@ -414,6 +472,85 @@ app.post('/api/projects', requireAuth, async (req, res) => {
   } catch (err: any) {
     console.error('Error creating project:', err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/projects/scan-repo - Standalone or project repository scanner
+app.post('/api/projects/scan-repo', requireAuth, async (req, res) => {
+  try {
+    const { github_repo, github_branch = 'main', github_token } = req.body || {};
+    if (!github_repo || !github_repo.trim()) {
+      return res.status(400).json({ error: 'GitHub repository URL is required' });
+    }
+
+    const scanResult = await scanRepository(github_repo.trim(), github_branch.trim(), github_token);
+    res.json(scanResult);
+  } catch (err: any) {
+    console.error('Scan error:', err);
+    res.status(500).json({ error: err.message || 'Repository scan failed' });
+  }
+});
+
+// POST /api/projects/:id/scan-repo - Scan and attach report to existing project
+app.post('/api/projects/:id/scan-repo', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { github_repo, github_branch = 'main', github_token, root_domain } = req.body || {};
+
+    if (!github_repo || !github_repo.trim()) {
+      return res.status(400).json({ error: 'GitHub repository URL is required' });
+    }
+
+    const scanResult = await scanRepository(github_repo.trim(), github_branch.trim(), github_token);
+
+    // Check if project has env_vars already, if not seed with scanResult defaults
+    const currentProjRes = await pool.query('SELECT env_vars FROM cf_projects WHERE id = $1', [id]);
+    let envVarsToSave = currentProjRes.rows[0]?.env_vars;
+    if (!envVarsToSave || Object.keys(envVarsToSave).length === 0) {
+      envVarsToSave = scanResult.detected_env_defaults || {};
+    }
+
+    // Update project with scanned parameters
+    const updateRes = await pool.query(
+      `UPDATE cf_projects 
+       SET github_repo = $1,
+           github_branch = $2,
+           github_token = COALESCE($3, github_token),
+           build_command = COALESCE($4, build_command),
+           output_dir = COALESCE($5, output_dir),
+           root_domain = CASE WHEN $6 <> '' THEN $6 ELSE root_domain END,
+           latest_commit_sha = $7,
+           latest_commit_message = $8,
+           status = 'idle',
+           updated_at = NOW()
+       WHERE id = $9
+       RETURNING *`,
+      [
+        github_repo.trim(),
+        github_branch.trim(),
+        github_token || '',
+        scanResult.recommended_build_command,
+        scanResult.recommended_output_dir,
+        (root_domain || '').trim().toLowerCase().replace(/^https?:\/\//, ''),
+        scanResult.commit_sha,
+        scanResult.commit_message,
+        id,
+      ]
+    );
+
+    const updatedProject = {
+      ...updateRes.rows[0],
+      env_vars: envVarsToSave,
+      scan_report: scanResult,
+    };
+
+    res.json({
+      project: updatedProject,
+      scan_report: scanResult,
+    });
+  } catch (err: any) {
+    console.error('Project scan error:', err);
+    res.status(500).json({ error: err.message || 'Repository scan failed' });
   }
 });
 
@@ -474,6 +611,8 @@ app.put('/api/projects/:id', requireAuth, async (req, res) => {
       output_dir,
       root_domain,
       subdomain_pattern,
+      env_vars,
+      scan_report,
     } = req.body;
 
     const result = await pool.query(
@@ -508,7 +647,13 @@ app.put('/api/projects/:id', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Project not found' });
     }
 
-    res.json(result.rows[0]);
+    const updated = {
+      ...result.rows[0],
+      env_vars: env_vars !== undefined ? env_vars : result.rows[0].env_vars,
+      scan_report: scan_report !== undefined ? scan_report : result.rows[0].scan_report,
+    };
+
+    res.json(updated);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -629,7 +774,7 @@ app.get('/api/projects/:id/status', requireAuth, async (req, res) => {
     }
 
     const deploymentsRes = await pool.query(
-      `SELECT account_id, id as deployment_id, build_status, progress_percent, current_step, error_message, updated_at, pages_dev_domain, custom_domain
+      `SELECT account_id, id as deployment_id, build_status, progress_percent, current_step, error_message, updated_at, pages_dev_domain, custom_domain, logs
        FROM cf_deployments 
        WHERE project_id = $1`,
       [id]
@@ -828,13 +973,17 @@ app.get('/api/deployments/:id', requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/deployments/:id/rebuild - Rebuild single deployment
+// POST /api/deployments/:id/rebuild - Rebuild single deployment (supports deployment ID or account ID)
 app.post('/api/deployments/:id/rebuild', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const depRes = await pool.query('SELECT project_id, account_id FROM cf_deployments WHERE id = $1', [id]);
+    let depRes = await pool.query('SELECT project_id, account_id FROM cf_deployments WHERE id = $1', [id]);
     if (depRes.rows.length === 0) {
-      return res.status(404).json({ error: 'Deployment not found' });
+      // Fallback: check if id is an account_id
+      depRes = await pool.query('SELECT project_id, id as account_id FROM cf_accounts WHERE id = $1', [id]);
+    }
+    if (depRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Deployment or account not found' });
     }
 
     const { project_id, account_id } = depRes.rows[0];
@@ -852,9 +1001,46 @@ app.post('/api/deployments/:id/rebuild', requireAuth, async (req, res) => {
   }
 });
 
+// POST /api/accounts/:id/build - Build single account directly
+app.post('/api/accounts/:id/build', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const accRes = await pool.query('SELECT id, project_id FROM cf_accounts WHERE id = $1', [id]);
+    if (accRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Account not found' });
+    }
+
+    const { project_id } = accRes.rows[0];
+    if (isProjectBuilding(project_id)) {
+      return res.status(409).json({ error: 'A build is already running for this project.' });
+    }
+
+    runBulkBuild({ projectId: project_id, accountIds: [id] }).catch((err) => {
+      console.error('Account build error:', err);
+    });
+
+    res.json({ success: true, message: 'Account build initiated' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Start server
 async function startServer() {
-  await initDb();
+  try {
+    await initDb();
+    // Clean up any stale builds left over from unexpected process termination
+    await pool.query(`UPDATE cf_projects SET status = 'idle' WHERE status = 'building'`);
+    await pool.query(`
+      UPDATE cf_deployments 
+      SET build_status = 'failed', 
+          current_step = 'Server restarted', 
+          error_message = 'Build process interrupted by server restart. Click rebuild to retry.' 
+      WHERE build_status IN ('building', 'queued')
+    `);
+  } catch (err: any) {
+    console.warn('[DB Warning] Initial DB setup connection issue:', err?.message || err);
+  }
 
   if (isDev) {
     const vite = await createViteServer({

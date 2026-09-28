@@ -59,3 +59,18 @@ h1, h2, h3, h4, h5, h6 {
   color: #64748b;
 }
 
+/* Background grid pattern & glow effects */
+.bg-grid {
+  background-size: 28px 28px;
+  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}
+
+.orange-glow {
+  box-shadow: 0 0 35px -8px rgba(246, 130, 31, 0.35);
+}
+
+.neon-glow {
+  box-shadow: 0 0 25px -6px rgba(0, 229, 153, 0.3);
+}
+

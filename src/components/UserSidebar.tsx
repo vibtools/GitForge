@@ -44,7 +44,7 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({
     },
     {
       id: 'builder',
-      label: 'Fleet Builder',
+      label: 'Workplace',
       icon: Layers,
       badge: activeProject ? activeProject.account_count || 0 : undefined,
     },

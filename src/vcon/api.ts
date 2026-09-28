@@ -22,12 +22,10 @@ function getHeaders(): HeadersInit {
 }
 
 async function handleResponse<T>(res: Response): Promise<T> {
-  if (res.status === 401) {
-    throw new Error('Session expired or unauthorized. Please re-login.');
-  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.error || `HTTP ${res.status}: ${res.statusText}`);
+    const errorMsg = data.error || (res.status === 401 ? 'Invalid credentials or session expired.' : `HTTP ${res.status}: ${res.statusText}`);
+    throw new Error(errorMsg);
   }
   return data as T;
 }
@@ -404,6 +402,16 @@ export const vconApi = {
       method: 'DELETE',
       headers: getHeaders(),
       body: JSON.stringify({ fileName }),
+    });
+    return handleResponse(res);
+  },
+
+  // Test Cloudflare OAuth credentials
+  async testCloudflareOAuth(payload: { client_id: string; client_secret: string }): Promise<{ valid: boolean; message: string; error?: string }> {
+    const res = await fetch('/api/admin/cloudflare/oauth/test', {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(payload),
     });
     return handleResponse(res);
   },

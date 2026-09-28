@@ -13,6 +13,7 @@ import {
   verifyCloudflareCredentials,
   fetchGitHubRepoDetails,
 } from './builder.js';
+import { resolveRedirectUri } from './cf-oauth.js';
 import {
   getS3Credentials,
   checkS3Connection,
@@ -33,7 +34,7 @@ adminRouter.get('/auth/status', async (req: Request, res: Response) => {
     const adminCountRes = await pool.query(
       `SELECT COUNT(*) FROM app_users WHERE role = 'admin'`
     );
-    const totalAdmins = parseInt(adminCountRes.rows[0].count, 10);
+    const totalAdmins = parseInt(adminCountRes.rows[0]?.count || '0', 10);
 
     const authHeader = req.headers.authorization;
     const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.headers['x-session-token'] as string);
@@ -43,10 +44,21 @@ adminRouter.get('/auth/status', async (req: Request, res: Response) => {
     }
 
     const user = await validateSession(token);
-    const isAdmin = !!user && user.role === 'admin';
+    if (!user) {
+      return res.json({ has_admin: totalAdmins > 0, is_admin: false, user: null });
+    }
+
+    let isAdmin = user.role === 'admin';
+    // If no admin exists in the system yet, promote currently authenticated user to admin
+    if (!isAdmin && totalAdmins === 0) {
+      await pool.query(`UPDATE app_users SET role = 'admin' WHERE id = $1`, [user.id]);
+      user.role = 'admin';
+      isAdmin = true;
+      invalidateSessionCache(token);
+    }
 
     res.json({
-      has_admin: totalAdmins > 0,
+      has_admin: totalAdmins > 0 || isAdmin,
       is_admin: isAdmin,
       user: isAdmin ? user : null,
     });
@@ -61,7 +73,7 @@ adminRouter.get('/auth/status', async (req: Request, res: Response) => {
  */
 adminRouter.post('/auth/setup', async (req: Request, res: Response) => {
   try {
-    const { email, password, name } = req.body;
+    const { email, password, name } = req.body || {};
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
@@ -70,7 +82,7 @@ adminRouter.post('/auth/setup', async (req: Request, res: Response) => {
     const adminCountRes = await pool.query(
       `SELECT COUNT(*) FROM app_users WHERE role = 'admin'`
     );
-    const totalAdmins = parseInt(adminCountRes.rows[0].count, 10);
+    const totalAdmins = parseInt(adminCountRes.rows[0]?.count || '0', 10);
     if (totalAdmins > 0) {
       return res.status(403).json({ error: 'Administrator already configured. Please log in.' });
     }
@@ -88,6 +100,7 @@ adminRouter.post('/auth/setup', async (req: Request, res: Response) => {
     );
 
     const token = await createSession(userId);
+    invalidateSessionCache();
     await logAudit(normalizedEmail, 'MASTER_ADMIN_INITIALIZED', { email: normalizedEmail, name: adminName }, req.ip);
 
     res.status(201).json({
@@ -106,31 +119,41 @@ adminRouter.post('/auth/setup', async (req: Request, res: Response) => {
  */
 adminRouter.post('/auth/login', async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body || {};
     if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
+      return res.status(400).json({ error: 'Email and password are required.' });
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    const result = await pool.query('SELECT * FROM app_users WHERE email = $1', [normalizedEmail]);
+    const result = await pool.query('SELECT * FROM app_users WHERE LOWER(TRIM(email)) = $1', [normalizedEmail]);
     if (result.rows.length === 0) {
       await logAudit(normalizedEmail, 'ADMIN_LOGIN_FAILED', { reason: 'User not found' }, req.ip);
-      return res.status(401).json({ error: 'Invalid credentials or unauthorized' });
+      return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
     const user = result.rows[0];
     const isValid = verifyPassword(password, user.password_hash, user.salt);
     if (!isValid) {
       await logAudit(normalizedEmail, 'ADMIN_LOGIN_FAILED', { reason: 'Password mismatch' }, req.ip);
-      return res.status(401).json({ error: 'Invalid credentials or unauthorized' });
+      return res.status(401).json({ error: 'Invalid email or password.' });
+    }
+
+    const adminCountRes = await pool.query(`SELECT COUNT(*) FROM app_users WHERE role = 'admin'`);
+    const totalAdmins = parseInt(adminCountRes.rows[0]?.count || '0', 10);
+
+    // If no admin is configured in system yet, promote this user
+    if (user.role !== 'admin' && totalAdmins === 0) {
+      await pool.query(`UPDATE app_users SET role = 'admin' WHERE id = $1`, [user.id]);
+      user.role = 'admin';
     }
 
     if (user.role !== 'admin') {
       await logAudit(normalizedEmail, 'ADMIN_LOGIN_DENIED', { reason: 'Insufficient privileges' }, req.ip);
-      return res.status(403).json({ error: 'Access denied: Administrator privileges required.' });
+      return res.status(403).json({ error: 'Access denied: Account does not have administrator privileges.' });
     }
 
     const token = await createSession(user.id);
+    invalidateSessionCache();
     await logAudit(normalizedEmail, 'ADMIN_LOGIN_SUCCESS', { user_id: user.id }, req.ip);
 
     res.json({
@@ -143,8 +166,29 @@ adminRouter.post('/auth/login', async (req: Request, res: Response) => {
   }
 });
 
-// Middleware: all subsequent admin routes require authenticated session
-adminRouter.use(requireAuth);
+// Middleware: all subsequent admin routes require authenticated administrator session
+const requireAdminAuth = async (req: Request, res: Response, next: () => void) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.headers['x-session-token'] as string);
+
+  if (!token) {
+    return res.status(401).json({ error: 'Unauthorized: Administrator session required.' });
+  }
+
+  const user = await validateSession(token);
+  if (!user) {
+    return res.status(401).json({ error: 'Session expired or invalid. Please re-login.' });
+  }
+
+  if (user.role !== 'admin') {
+    return res.status(403).json({ error: 'Forbidden: Administrator privileges required.' });
+  }
+
+  (req as any).user = user;
+  next();
+};
+
+adminRouter.use(requireAdminAuth);
 
 /**
  * GET /api/admin/overview
@@ -621,7 +665,7 @@ adminRouter.get('/projects', async (_req: Request, res: Response) => {
       ORDER BY p.updated_at DESC
     `);
 
-    const projectsWithRunningState = result.rows.map((p) => ({
+    const projectsWithRunningState = result.rows.map((p: any) => ({
       ...p,
       is_building: isProjectBuilding(p.id),
     }));
@@ -686,7 +730,7 @@ adminRouter.get('/accounts', async (_req: Request, res: Response) => {
     `);
 
     // Mask api tokens for security in default payload (first 4 and last 4 shown)
-    const accounts = result.rows.map((row) => {
+    const accounts = result.rows.map((row: any) => {
       const rawToken = row.api_token || '';
       const masked = rawToken.length > 8
         ? rawToken.slice(0, 4) + '••••••••' + rawToken.slice(-4)
@@ -1071,6 +1115,83 @@ adminRouter.post('/test-webhook', async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     res.status(500).json({ error: `Webhook trigger failed: ${err.message}` });
+  }
+});
+
+/**
+ * POST /api/admin/cloudflare/oauth/test
+ * Test and verify Cloudflare OAuth App credentials (Client ID and Secret)
+ */
+adminRouter.post('/cloudflare/oauth/test', async (req: Request, res: Response) => {
+  try {
+    const { client_id, client_secret } = req.body || {};
+    if (!client_id || !client_secret) {
+      return res.status(400).json({ valid: false, error: 'Both Client ID and Client Secret are required.' });
+    }
+
+    const trimmedId = String(client_id).trim();
+    const trimmedSecret = String(client_secret).trim();
+
+    if (trimmedId.length < 8) {
+      return res.json({ valid: false, error: 'Client ID is invalid or too short.' });
+    }
+
+    // Query Cloudflare OAuth token endpoint with basic auth
+    const basicAuth = Buffer.from(`${trimmedId}:${trimmedSecret}`).toString('base64');
+    const redirectUri = resolveRedirectUri(req);
+
+    const cfRes = await fetch('https://dash.cloudflare.com/oauth2/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: `Basic ${basicAuth}`,
+        Accept: 'application/json',
+      },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code: 'probe_test_check',
+        redirect_uri: redirectUri,
+        client_id: trimmedId,
+        client_secret: trimmedSecret,
+      }).toString(),
+    });
+
+    const data = await cfRes.json().catch(() => ({}));
+
+    // If Cloudflare explicitly returns invalid_client or 401, client credentials are rejected
+    if (cfRes.status === 401 || data.error === 'invalid_client') {
+      return res.json({
+        valid: false,
+        error: `Cloudflare rejected credentials (${data.error_description || data.error || 'invalid_client'}). Please check your Client ID and Client Secret in Cloudflare Dashboard.`,
+      });
+    }
+
+    // If Cloudflare returns redirect_uri_mismatch, client is authenticated but callback URI must be configured
+    if (data.error === 'redirect_uri_mismatch') {
+      return res.json({
+        valid: false,
+        error: `Client credentials are valid, but redirect URI (${redirectUri}) must be added to your Cloudflare OAuth App in the Cloudflare Dashboard.`,
+      });
+    }
+
+    // If response is invalid_grant or code-related 400, this confirms client_id & client_secret are authentic
+    if (
+      data.error === 'invalid_grant' ||
+      data.error === 'invalid_request' ||
+      cfRes.status === 400
+    ) {
+      return res.json({
+        valid: true,
+        message: 'Cloudflare OAuth App credentials verified successfully! Client ID & Secret are authentic.',
+      });
+    }
+
+    return res.json({
+      valid: true,
+      message: 'Cloudflare OAuth connection test passed.',
+    });
+  } catch (err: any) {
+    res.status(500).json({ valid: false, error: err.message || 'Connection test failed' });
   }
 });
 

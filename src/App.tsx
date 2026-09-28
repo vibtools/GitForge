@@ -29,6 +29,7 @@ import { UserHeader } from './components/UserHeader';
 import { UserDashboardView } from './components/UserDashboardView';
 import { UserProfileSettingsView } from './components/UserProfileSettingsView';
 import { UserProjectsCatalogView } from './components/UserProjectsCatalogView';
+import { ProjectWorkplaceView } from './components/ProjectWorkplaceView';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -217,6 +218,7 @@ export default function App() {
               error_message: dep.error_message !== undefined ? dep.error_message : acc.error_message,
               pages_dev_domain: dep.pages_dev_domain || acc.pages_dev_domain,
               custom_domain: dep.custom_domain || acc.custom_domain,
+              logs: dep.logs !== undefined ? dep.logs : acc.logs,
             };
           }
           return acc;
@@ -311,18 +313,20 @@ export default function App() {
     }
   };
 
-  // Bulk Rebuild All
-  const handleRebuildAll = async () => {
+  // Fleet or subset account build trigger
+  const handleTriggerBuild = async (accountIds?: string[]) => {
     if (!activeProject) return;
     try {
       setIsBuilding(true);
-      showToast('Build triggered.');
+      const isSubset = Array.isArray(accountIds) && accountIds.length > 0;
+      showToast(isSubset ? `Building ${accountIds.length} account(s)...` : 'Fleet build started.');
       const res = await fetch(`/api/projects/${activeProject.id}/build`, {
         method: 'POST',
         headers: getAuthHeaders(),
+        body: isSubset ? JSON.stringify({ accountIds }) : undefined,
       });
       if (!res.ok) {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Failed to start build');
       }
     } catch (err: any) {
@@ -334,22 +338,7 @@ export default function App() {
   // Rebuild Selected
   const handleRebuildSelected = async () => {
     if (!activeProject || selectedAccountIds.length === 0) return;
-    try {
-      setIsBuilding(true);
-      showToast(`Building ${selectedAccountIds.length} accounts...`);
-      const res = await fetch(`/api/projects/${activeProject.id}/build`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ accountIds: selectedAccountIds }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to start build');
-      }
-    } catch (err: any) {
-      showToast(err.message || 'Build trigger failed');
-      setIsBuilding(false);
-    }
+    handleTriggerBuild(selectedAccountIds);
   };
 
   // View Account
@@ -371,18 +360,29 @@ export default function App() {
     }
   };
 
-  // Single Account Rebuild
-  const handleRebuildSingle = async (deploymentId: string) => {
+  // Single Account Rebuild (handles deployment ID or account ID)
+  const handleRebuildSingle = async (deploymentOrAccountId: string) => {
     try {
       setIsBuilding(true);
       showToast('Rebuilding account...');
-      const res = await fetch(`/api/deployments/${deploymentId}/rebuild`, {
+      const res = await fetch(`/api/deployments/${deploymentOrAccountId}/rebuild`, {
         method: 'POST',
         headers: getAuthHeaders(),
       });
-      if (!res.ok) throw new Error('Failed to start rebuild');
+      if (!res.ok) {
+        // Fallback to direct account build
+        const fbRes = await fetch(`/api/accounts/${deploymentOrAccountId}/build`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+        });
+        if (!fbRes.ok) {
+          const errData = await fbRes.json().catch(() => ({}));
+          throw new Error(errData.error || 'Failed to start rebuild');
+        }
+      }
     } catch (err: any) {
       showToast(err.message || 'Error triggering rebuild');
+      setIsBuilding(false);
     }
   };
 
@@ -549,7 +549,7 @@ export default function App() {
           isBuilding={isBuilding}
         />
 
-        <main className="flex-1 bg-slate-950 p-3 overflow-y-auto">
+        <main className={`flex-1 bg-slate-950 overflow-hidden flex flex-col ${activeTab === 'builder' ? 'p-0' : 'p-3 overflow-y-auto'}`}>
           {activeTab === 'dashboard' && (
             <UserDashboardView
               projects={projects}
@@ -573,15 +573,14 @@ export default function App() {
                 loadProjectDetails(p.id);
               }}
               onOpenNewProject={() => setIsAddProjectOpen(true)}
-              onOpenBulkAccounts={(p) => {
-                setActiveProject(p);
-                loadProjectDetails(p.id);
-                setIsBulkModalOpen(true);
-              }}
-              onGoToBuilder={(p) => {
+              onOpenProjectWorkplace={(p) => {
                 setActiveProject(p);
                 loadProjectDetails(p.id);
                 setActiveTab('builder');
+              }}
+              onProjectUpdated={(updated) => {
+                setActiveProject(updated);
+                setProjects((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
               }}
               onDeleteProject={handleDeleteProject}
             />
@@ -601,145 +600,48 @@ export default function App() {
 
           {activeTab === 'builder' && (
             <>
-              {isLoading ? (
-                <div className="flex flex-col items-center justify-center py-20 text-slate-500 space-y-2">
+              {isLoading && !activeProject ? (
+                <div className="flex flex-col items-center justify-center flex-1 py-20 text-slate-500 space-y-2">
                   <RefreshCw className="w-5 h-5 animate-spin text-orange-500" />
                 </div>
               ) : !activeProject ? (
-                <div className="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center max-w-sm mx-auto my-12">
-                  <div className="w-10 h-10 mx-auto rounded-full bg-slate-800 flex items-center justify-center text-orange-400 mb-3">
-                    <FolderGit2 className="w-5 h-5" />
+                <div className="flex-1 flex items-center justify-center p-4">
+                  <div className="bg-slate-900 border border-slate-800 rounded-lg p-6 text-center max-w-sm w-full space-y-3">
+                    <div className="w-10 h-10 mx-auto rounded-full bg-slate-800 flex items-center justify-center text-orange-400">
+                      <FolderGit2 className="w-5 h-5" />
+                    </div>
+                    <div className="text-xs font-semibold text-slate-100">
+                      No Project Selected
+                    </div>
+                    <button
+                      onClick={() => setIsAddProjectOpen(true)}
+                      className="px-3 py-1.5 text-xs font-medium text-white bg-orange-600 hover:bg-orange-500 rounded transition inline-flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Create Project</span>
+                    </button>
                   </div>
-                  <h2 className="text-xs font-semibold text-slate-100 mb-3">
-                    No Projects Found
-                  </h2>
-                  <button
-                    onClick={() => setIsAddProjectOpen(true)}
-                    className="px-3 py-1.5 text-xs font-medium text-white bg-orange-600 hover:bg-orange-500 rounded transition inline-flex items-center gap-1.5"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Create Project</span>
-                  </button>
                 </div>
               ) : (
-                <div className="w-full max-w-6xl mx-auto space-y-2.5">
-                  {/* Project Header Bar */}
-                  <ProjectHeader
-                    project={activeProject}
-                    accounts={accounts}
-                    isBuilding={isBuilding}
-                    onRebuildAll={handleRebuildAll}
-                    onOpenBulkAccounts={() => setIsBulkModalOpen(true)}
-                    onCancelBuild={handleCancelBuild}
-                  />
-
-                  {/* Account List Controls & Filter Bar */}
-                  <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                    <div className="flex items-center gap-2 flex-1 max-w-sm">
-                      <div className="relative flex-1">
-                        <Search className="w-3 h-3 text-slate-500 absolute left-2 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="text"
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          placeholder="Search accounts..."
-                          className="w-full bg-slate-950 border border-slate-800 rounded pl-7 pr-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-orange-500"
-                        />
-                      </div>
-
-                      {/* Filter Tabs */}
-                      <div className="flex items-center gap-0.5 bg-slate-950 p-0.5 rounded border border-slate-800 text-[11px]">
-                        <button
-                          onClick={() => setStatusFilter('all')}
-                          className={`px-2 py-0.5 font-medium rounded transition ${
-                            statusFilter === 'all'
-                              ? 'bg-slate-800 text-white'
-                              : 'text-slate-400 hover:text-slate-200'
-                          }`}
-                        >
-                          All ({accounts.length})
-                        </button>
-                        <button
-                          onClick={() => setStatusFilter('success')}
-                          className={`px-2 py-0.5 font-medium rounded transition ${
-                            statusFilter === 'success'
-                              ? 'bg-emerald-950/60 text-emerald-300'
-                              : 'text-slate-400 hover:text-slate-200'
-                          }`}
-                        >
-                          Live
-                        </button>
-                        <button
-                          onClick={() => setStatusFilter('building')}
-                          className={`px-2 py-0.5 font-medium rounded transition ${
-                            statusFilter === 'building'
-                              ? 'bg-amber-950/60 text-amber-300'
-                              : 'text-slate-400 hover:text-slate-200'
-                          }`}
-                        >
-                          Building
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Batch Actions Bar */}
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {selectedAccountIds.length > 0 && (
-                        <>
-                          <button
-                            onClick={handleRebuildSelected}
-                            disabled={isBuilding}
-                            className="px-2.5 py-1 text-xs font-medium text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded transition flex items-center gap-1"
-                          >
-                            <RefreshCw className="w-3 h-3 text-orange-400" />
-                            <span>Build ({selectedAccountIds.length})</span>
-                          </button>
-
-                          <button
-                            onClick={handleBulkDeleteAccounts}
-                            disabled={isBuilding}
-                            className="px-2.5 py-1 text-xs font-medium text-red-300 hover:text-white bg-red-950/60 hover:bg-red-900/80 border border-red-800/80 rounded transition flex items-center gap-1"
-                            title="Remove selected accounts"
-                          >
-                            <Trash2 className="w-3 h-3 text-red-400" />
-                            <span>Delete ({selectedAccountIds.length})</span>
-                          </button>
-                        </>
-                      )}
-
-                      <button
-                        onClick={() => setIsBulkModalOpen(true)}
-                        className="px-2.5 py-1 text-xs font-medium text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded transition flex items-center gap-1"
-                      >
-                        <Upload className="w-3 h-3 text-orange-400" />
-                        <span>Add Accounts</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Accounts Table */}
-                  <AccountTable
-                    project={activeProject}
-                    accounts={filteredAccounts}
-                    selectedIds={selectedAccountIds}
-                    onToggleSelect={(id) => {
-                      setSelectedAccountIds((prev) =>
-                        prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-                      );
-                    }}
-                    onToggleSelectAll={() => {
-                      if (selectedAccountIds.length === filteredAccounts.length) {
-                        setSelectedAccountIds([]);
-                      } else {
-                        setSelectedAccountIds(filteredAccounts.map((a) => a.id));
-                      }
-                    }}
-                    onViewAccount={handleViewAccount}
-                    onRebuildAccount={handleRebuildSingle}
-                    onDeleteAccount={handleDeleteAccount}
-                    isBuilding={isBuilding}
-                  />
-                </div>
+                <ProjectWorkplaceView
+                  project={activeProject}
+                  accounts={accounts}
+                  isBuilding={isBuilding}
+                  onUpdateProject={(updated) => {
+                    setActiveProject(updated);
+                    setProjects((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+                  }}
+                  onRefreshProject={() => {
+                    if (activeProject) loadProjectDetails(activeProject.id);
+                  }}
+                  onOpenBulkModal={() => setIsBulkModalOpen(true)}
+                  onViewAccount={handleViewAccount}
+                  onRebuildAccount={handleRebuildSingle}
+                  onDeleteAccount={handleDeleteAccount}
+                  onTriggerBuild={handleTriggerBuild}
+                  onCancelBuild={handleCancelBuild}
+                  onNotify={(msg) => showToast(msg)}
+                />
               )}
             </>
           )}

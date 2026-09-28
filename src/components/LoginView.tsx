@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, Mail, User as UserIcon, Shield, ArrowRight } from 'lucide-react';
+import { Lock, Mail, User as UserIcon, Shield, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { User } from '../types';
 
 interface LoginViewProps {
@@ -11,18 +11,46 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, hasUsers }
   const [isRegister, setIsRegister] = useState(!hasUsers);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      setError('Please enter your email address.');
+      return;
+    }
+
+    if (!password) {
+      setError('Please enter your password.');
+      return;
+    }
+
+    if (isRegister) {
+      if (password.length < 6) {
+        setError('Password must be at least 6 characters long.');
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError('Passwords do not match. Please check again.');
+        return;
+      }
+    }
+
     setLoading(true);
 
     try {
       const endpoint = isRegister ? '/api/auth/register' : '/api/auth/login';
-      const body = isRegister ? { email, password, name } : { email, password };
+      const body = isRegister 
+        ? { email: cleanEmail, password, confirmPassword, name: name.trim() } 
+        : { email: cleanEmail, password };
 
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -35,7 +63,9 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, hasUsers }
         throw new Error(data.error || 'Authentication failed');
       }
 
-      localStorage.setItem('cf_bulk_token', data.token);
+      if (data.token) {
+        localStorage.setItem('cf_bulk_token', data.token);
+      }
       onLoginSuccess(data.user, data.token);
     } catch (err: any) {
       setError(err.message || 'Login failed');
@@ -71,10 +101,11 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, hasUsers }
                 <input
                   type="text"
                   required
+                  disabled={loading}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Your Name"
-                  className="w-full bg-transparent text-slate-200 focus:outline-none text-xs"
+                  className="w-full bg-transparent text-slate-200 focus:outline-none text-xs disabled:opacity-50"
                 />
               </div>
             </div>
@@ -87,28 +118,70 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, hasUsers }
               <input
                 type="email"
                 required
+                disabled={loading}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@example.com"
-                className="w-full bg-transparent text-slate-200 focus:outline-none text-xs"
+                className="w-full bg-transparent text-slate-200 focus:outline-none text-xs disabled:opacity-50"
               />
             </div>
           </div>
 
           <div>
             <label className="block text-slate-400 text-[11px] mb-0.5">Password</label>
-            <div className="flex items-center bg-slate-950 border border-slate-800 rounded px-2 py-1 focus-within:border-orange-500">
+            <div className="flex items-center bg-slate-950 border border-slate-800 rounded px-2 py-1 focus-within:border-orange-500 relative">
               <Shield className="w-3.5 h-3.5 text-slate-500 mr-1.5 shrink-0" />
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 required
+                minLength={isRegister ? 6 : undefined}
+                disabled={loading}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full bg-transparent text-slate-200 focus:outline-none text-xs font-mono"
+                placeholder={isRegister ? 'Min 6 characters' : '••••••••'}
+                className="w-full bg-transparent text-slate-200 focus:outline-none text-xs font-mono pr-5 disabled:opacity-50"
               />
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => setShowPassword(!showPassword)}
+                className="text-slate-500 hover:text-slate-300 transition shrink-0 ml-1"
+              >
+                {showPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+              </button>
             </div>
           </div>
+
+          {isRegister && (
+            <div>
+              <label className="block text-slate-400 text-[11px] mb-0.5">Confirm Password</label>
+              <div className={`flex items-center bg-slate-950 border rounded px-2 py-1 relative ${
+                confirmPassword && confirmPassword !== password
+                  ? 'border-red-600 focus-within:border-red-500'
+                  : 'border-slate-800 focus-within:border-orange-500'
+              }`}>
+                <Shield className="w-3.5 h-3.5 text-slate-500 mr-1.5 shrink-0" />
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  required
+                  minLength={6}
+                  disabled={loading}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Re-enter password"
+                  className="w-full bg-transparent text-slate-200 focus:outline-none text-xs font-mono pr-5 disabled:opacity-50"
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="text-slate-500 hover:text-slate-300 transition shrink-0 ml-1"
+                >
+                  {showConfirmPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                </button>
+              </div>
+            </div>
+          )}
 
           <button
             type="submit"
@@ -123,11 +196,13 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, hasUsers }
         <div className="mt-3 pt-2 border-t border-slate-800 text-center">
           <button
             type="button"
+            disabled={loading}
             onClick={() => {
               setIsRegister(!isRegister);
               setError(null);
+              setShowPassword(false);
             }}
-            className="text-[11px] text-slate-400 hover:text-slate-200 transition"
+            className="text-[11px] text-slate-400 hover:text-slate-200 transition disabled:opacity-50"
           >
             {isRegister ? 'Already registered? Sign In' : 'Create new account'}
           </button>

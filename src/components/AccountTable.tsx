@@ -11,6 +11,9 @@ import {
   ArrowUpRight,
   Shield,
   ShieldCheck,
+  Cloud,
+  Plus,
+  KeyRound,
 } from 'lucide-react';
 import { Account, Project } from '../types';
 
@@ -24,6 +27,9 @@ interface AccountTableProps {
   onRebuildAccount: (deploymentId: string) => void;
   onDeleteAccount: (accountId: string) => void;
   isBuilding: boolean;
+  onConnectOAuth?: () => void;
+  onAddManual?: () => void;
+  isOAuthConfigured?: boolean | null;
 }
 
 export const AccountTable: React.FC<AccountTableProps> = ({
@@ -36,6 +42,9 @@ export const AccountTable: React.FC<AccountTableProps> = ({
   onRebuildAccount,
   onDeleteAccount,
   isBuilding,
+  onConnectOAuth,
+  onAddManual,
+  isOAuthConfigured,
 }) => {
   const [testingId, setTestingId] = React.useState<string | null>(null);
   const [isTestingAll, setIsTestingAll] = React.useState(false);
@@ -104,11 +113,48 @@ export const AccountTable: React.FC<AccountTableProps> = ({
 
   if (accounts.length === 0) {
     return (
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center">
-        <div className="w-8 h-8 mx-auto rounded-full bg-slate-800 flex items-center justify-center text-slate-400 mb-2">
-          <Layers className="w-4 h-4 text-orange-400" />
+      <div className="bg-slate-900 border border-slate-800 rounded-lg p-6 text-center space-y-3">
+        <div className="w-9 h-9 mx-auto rounded-full bg-slate-800/80 border border-slate-700/60 flex items-center justify-center text-slate-400">
+          <Cloud className="w-4 h-4 text-orange-400" />
         </div>
-        <h3 className="text-xs font-semibold text-slate-200">No Cloudflare Accounts Added</h3>
+        <div className="space-y-0.5">
+          <h3 className="text-xs font-semibold text-slate-200">No Cloudflare Accounts Connected</h3>
+          <p className="text-[10px] text-slate-400 max-w-sm mx-auto">
+            Connect an account using 1-Click Cloudflare Auth App popup or import tokens directly.
+          </p>
+        </div>
+
+        <div className="flex items-center justify-center gap-2 pt-1">
+          {onConnectOAuth && (
+            <button
+              type="button"
+              onClick={onConnectOAuth}
+              className="px-3 py-1 text-[11px] font-semibold text-white bg-orange-600 hover:bg-orange-500 rounded transition flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
+              title={
+                isOAuthConfigured === false
+                  ? 'Cloudflare OAuth App requires Client ID & Secret in /vcon Settings.'
+                  : 'Connect Cloudflare account via 1-Click Auth App'
+              }
+            >
+              <Cloud className="w-3.5 h-3.5" />
+              <span>Connect via Auth App</span>
+              {isOAuthConfigured && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Auth App Active" />
+              )}
+            </button>
+          )}
+
+          {onAddManual && (
+            <button
+              type="button"
+              onClick={onAddManual}
+              className="px-2.5 py-1 text-[11px] font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <KeyRound className="w-3 h-3 text-slate-400" />
+              <span>API Token / Bulk</span>
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -132,15 +178,36 @@ export const AccountTable: React.FC<AccountTableProps> = ({
           )}
         </div>
 
-        <button
-          onClick={handleTestAllAccounts}
-          disabled={isTestingAll || isBuilding}
-          className="px-2 py-0.5 text-[11px] font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 disabled:opacity-50 border border-slate-700 rounded transition flex items-center gap-1 active:scale-95"
-          title="Test API credentials for all accounts against Cloudflare"
-        >
-          <Shield className={`w-3 h-3 text-orange-400 ${isTestingAll ? 'animate-spin' : ''}`} />
-          <span>{isTestingAll ? 'Verifying All Accounts...' : 'Test All Accounts'}</span>
-        </button>
+        <div className="flex items-center gap-1.5">
+          {onConnectOAuth && (
+            <button
+              type="button"
+              onClick={onConnectOAuth}
+              className="px-2 py-0.5 text-[10px] font-semibold text-orange-300 hover:text-orange-200 bg-orange-950/50 hover:bg-orange-900/60 border border-orange-800/80 rounded transition flex items-center gap-1 cursor-pointer active:scale-95"
+              title={
+                isOAuthConfigured === false
+                  ? 'Cloudflare OAuth App requires Client ID & Secret in /vcon Settings.'
+                  : 'Connect another Cloudflare account via Auth App popup'
+              }
+            >
+              <Cloud className="w-3 h-3 text-orange-400" />
+              <span>+ Connect Account</span>
+              {isOAuthConfigured && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Auth App Active" />
+              )}
+            </button>
+          )}
+
+          <button
+            onClick={handleTestAllAccounts}
+            disabled={isTestingAll || isBuilding}
+            className="px-2 py-0.5 text-[11px] font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 disabled:opacity-50 border border-slate-700 rounded transition flex items-center gap-1 active:scale-95"
+            title="Test API credentials for all accounts against Cloudflare"
+          >
+            <Shield className={`w-3 h-3 text-orange-400 ${isTestingAll ? 'animate-spin' : ''}`} />
+            <span>{isTestingAll ? 'Verifying...' : 'Test Accounts'}</span>
+          </button>
+        </div>
       </div>
 
       <div className="overflow-x-auto">
@@ -336,16 +403,14 @@ export const AccountTable: React.FC<AccountTableProps> = ({
                       </button>
 
                       {/* Rebuild Single Account */}
-                      {acc.deployment_id && (
-                        <button
-                          onClick={() => onRebuildAccount(acc.deployment_id!)}
-                          disabled={isBuilding}
-                          className="p-1 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded transition disabled:opacity-40"
-                          title="Rebuild"
-                        >
-                          <RefreshCw className={`w-3 h-3 ${isRowBuilding ? 'animate-spin text-orange-400' : ''}`} />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => onRebuildAccount(acc.deployment_id || acc.id)}
+                        disabled={isBuilding}
+                        className="p-1 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded transition disabled:opacity-40"
+                        title="Rebuild"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${isRowBuilding ? 'animate-spin text-orange-400' : ''}`} />
+                      </button>
 
                       {/* Delete Account */}
                       <button

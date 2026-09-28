@@ -1,24 +1,36 @@
-import React, { useState } from 'react';
-import { X, FolderGit2, AlertCircle, Plus } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Settings, AlertCircle, Save, Trash2 } from 'lucide-react';
 import { Project } from '../types';
 
-interface AddProjectModalProps {
+interface EditProjectModalProps {
   isOpen: boolean;
+  project: Project | null;
   onClose: () => void;
-  onProjectCreated: (project: Project) => void;
+  onProjectUpdated: (updated: Project) => void;
+  onDeleteProject: (projectId: string) => void;
 }
 
-export const AddProjectModal: React.FC<AddProjectModalProps> = ({
+export const EditProjectModal: React.FC<EditProjectModalProps> = ({
   isOpen,
+  project,
   onClose,
-  onProjectCreated,
+  onProjectUpdated,
+  onDeleteProject,
 }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (project) {
+      setName(project.name || '');
+      setDescription(project.description || '');
+      setError(null);
+    }
+  }, [project, isOpen]);
+
+  if (!isOpen || !project) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,15 +38,15 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
 
     const cleanName = name.trim();
     if (!cleanName) {
-      setError('Project Name is required');
+      setError('Project Name cannot be empty');
       return;
     }
 
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem('cf_bulk_token') || '';
-      const res = await fetch('/api/projects', {
-        method: 'POST',
+      const res = await fetch(`/api/projects/${project.id}`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
@@ -47,18 +59,23 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Failed to create project');
+        throw new Error(errData.error || 'Failed to update project');
       }
 
-      const created = await res.json();
-      setName('');
-      setDescription('');
-      onProjectCreated(created);
+      const updated = await res.json();
+      onProjectUpdated(updated);
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Error creating project');
+      setError(err.message || 'Error updating project');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = () => {
+    if (window.confirm(`Are you sure you want to permanently delete project "${project.name}" and all associated data?`)) {
+      onDeleteProject(project.id);
+      onClose();
     }
   };
 
@@ -68,8 +85,8 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
         {/* Header */}
         <div className="px-3 py-2 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-1.5">
-            <FolderGit2 className="w-3.5 h-3.5 text-orange-400" />
-            <h2 className="text-xs font-semibold text-slate-100">Create Project</h2>
+            <Settings className="w-3.5 h-3.5 text-orange-400" />
+            <h2 className="text-xs font-semibold text-slate-100">Project Settings</h2>
           </div>
           <button
             type="button"
@@ -97,40 +114,50 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
               disabled={isSubmitting}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. My-Production-App"
               className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-[11px] text-slate-200 focus:outline-none focus:border-orange-500 disabled:opacity-50"
             />
           </div>
 
           <div>
-            <label className="block text-slate-400 mb-0.5">Description (Optional)</label>
+            <label className="block text-slate-400 mb-0.5">Description</label>
             <textarea
               rows={2}
               disabled={isSubmitting}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Brief description of the fleet orchestrator deployment..."
               className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-[11px] text-slate-200 focus:outline-none focus:border-orange-500 disabled:opacity-50 resize-none"
             />
           </div>
 
-          <div className="flex justify-end gap-1.5 pt-2 border-t border-slate-800">
+          <div className="flex items-center justify-between pt-2 border-t border-slate-800">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleDelete}
               disabled={isSubmitting}
-              className="px-2.5 py-1 text-[11px] text-slate-400 hover:text-white bg-slate-800 rounded transition"
+              className="px-2 py-0.5 text-[10px] font-semibold text-red-300 hover:text-red-200 bg-red-950/80 hover:bg-red-900 border border-red-800 rounded transition flex items-center gap-1"
             >
-              Cancel
+              <Trash2 className="w-3 h-3" />
+              <span>Delete</span>
             </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-3 py-1 text-[11px] font-semibold text-white bg-orange-600 hover:bg-orange-500 disabled:opacity-50 rounded transition flex items-center gap-1"
-            >
-              <Plus className="w-3 h-3" />
-              <span>{isSubmitting ? 'Creating...' : 'Create Project'}</span>
-            </button>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isSubmitting}
+                className="px-2.5 py-1 text-[11px] text-slate-400 hover:text-white bg-slate-800 rounded transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-3 py-1 text-[11px] font-semibold text-white bg-orange-600 hover:bg-orange-500 disabled:opacity-50 rounded transition flex items-center gap-1"
+              >
+                <Save className="w-3 h-3" />
+                <span>{isSubmitting ? 'Saving...' : 'Save'}</span>
+              </button>
+            </div>
           </div>
         </form>
       </div>
