@@ -430,53 +430,143 @@ npm run dev
 
 | Variable | Required | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `DATABASE_URL` | **Yes** | — | PostgreSQL connection string (supports Neon pooler with `?sslmode=require`). |
-| `PORT` | No | `3000` | Port for the Express server and Vite development proxy. |
-| `NODE_ENV` | No | `development` | Environment mode (`development` or `production`). |
-| `APP_URL` | No | `http://localhost:3000` | Public base URL of the deployment. |
-| `GEMINI_API_KEY` | No | — | Optional API key for Google Gemini AI extensions. |
+| `DATABASE_URL` | **Yes** | — | PostgreSQL connection string (supports Neon pooler with `?sslmode=require`, local PostgreSQL, Supabase, or Cloud SQL). |
+| `PORT` | No | `3000` | Port for the Express server and Vite static file server. |
+| `NODE_ENV` | No | `production` | Environment mode (`production` for live Docker/Coolify deployments). |
+| `APP_URL` | **Recommended**| `http://localhost:3000` | Public base domain/URL of the deployment (e.g. `https://gitforge.yourdomain.com`). |
+| `CLOUDFLARE_OAUTH_CLIENT_ID` | No | — | Cloudflare OAuth 2.0 Client ID for 1-Click account authorization. |
+| `CLOUDFLARE_OAUTH_CLIENT_SECRET` | No | — | Cloudflare OAuth 2.0 Client Secret. |
+| `CLOUDFLARE_OAUTH_SCOPES` | No | `account:read pages:edit dns:edit` | OAuth permission scopes for fleet provisioning. |
+| `S3_ENDPOINT` | No | — | S3-compatible storage endpoint (Backblaze B2, AWS S3, Cloudflare R2, MinIO). |
+| `S3_REGION` | No | — | S3 bucket region (e.g. `us-east-005` or `auto`). |
+| `S3_BUCKET_NAME` | No | — | S3 bucket name for backups and storage. |
+| `S3_ACCESS_KEY_ID` | No | — | S3 key ID with read/write permissions. |
+| `S3_SECRET_ACCESS_KEY` | No | — | S3 application secret key. |
 
 ---
 
 ## 11. Production Deployment Guide
 
-### Option 1: Coolify 1-Click Quick Deploy (Self-Hosted PaaS)
+### Option 1: Coolify Step-by-Step Complete Deployment Guide (Self-Hosted PaaS)
 
-1. In your **Coolify Dashboard**, click **+ Create New Resource** > **Service** or **Application (Git / Docker Compose)**.
-2. If using **Docker Compose**: Paste the contents of `docker-compose.yml` into Coolify.
-3. If connecting via **GitHub**: Point to this repository, select **Docker Compose** or **Dockerfile**.
-4. Configure the Environment Variables in Coolify:
-   ```env
-   DATABASE_URL=postgresql://username:password@ep-example.neon.tech/neondb?sslmode=require
-   APP_URL=https://your-gitforge-domain.com
-   PORT=3000
-   NODE_ENV=production
-   ```
-5. Click **Deploy**. Coolify will build the image, attach SSL via Traefik automatically, and run healthchecks.
+Coolify is an open-source, self-hosted Heroku/Netlify/Vercel alternative. GitForge is 100% pre-configured for instant zero-downtime deployment on Coolify.
+
+#### 📋 Prerequisites:
+1. A running **Coolify Instance** (v4.x+).
+2. A **PostgreSQL Database** (either created directly inside Coolify via *Databases > PostgreSQL*, or serverless like Neon, Supabase, Cloud SQL).
+3. A **Custom Domain or Subdomain** (e.g. `gitforge.yourdomain.com`) with DNS `A` record pointed to your Coolify server IP.
 
 ---
 
-### Option 2: Docker Compose (Quick Local / VPS Deployment)
+#### 🚀 Method A: Deploy via GitHub / Git Repository (Recommended)
 
-**With External / Neon PostgreSQL:**
+1. **Create New Resource in Coolify:**
+   - Log into your Coolify dashboard.
+   - Select your **Project** and **Environment** (e.g., `Production`).
+   - Click **+ New Resource** > Select **Application**.
+
+2. **Connect Git Repository:**
+   - Choose **Public Repository** (or **Private Repository / GitHub App**).
+   - Paste the Git repository URL of GitForge: `https://github.com/your-username/gitforge.git`
+   - Set the branch to deploy: `main`.
+
+3. **Configure Build Pack:**
+   - Coolify will automatically detect the `Dockerfile` and `docker-compose.yml` in the root.
+   - Select **Dockerfile** (or **Docker Compose**).
+   - Set **Exposed Port**: `3000` (or `${PORT}`).
+
+4. **Set Custom Domain & Automatic SSL:**
+   - In the **Domains** field, input your domain with HTTPS:
+     ```
+     https://gitforge.yourdomain.com
+     ```
+   - Coolify's built-in Traefik reverse proxy will automatically generate and renew Let's Encrypt SSL certificates.
+
+5. **Configure Environment Variables:**
+   - Navigate to the **Environment Variables** tab in Coolify.
+   - Add the following key-value pairs (toggle *Build Variable* off, *Runtime Variable* on):
+     ```env
+     PORT=3000
+     NODE_ENV=production
+     APP_URL=https://gitforge.yourdomain.com
+     DATABASE_URL=postgresql://username:password@ep-example.neon.tech/neondb?sslmode=require
+     ```
+   - *(Optional Cloudflare OAuth & S3)*:
+     ```env
+     CLOUDFLARE_OAUTH_CLIENT_ID=your_cf_client_id
+     CLOUDFLARE_OAUTH_CLIENT_SECRET=your_cf_client_secret
+     CLOUDFLARE_OAUTH_SCOPES=account:read pages:edit dns:edit
+     ```
+
+6. **Healthcheck Configuration:**
+   - Healthcheck is auto-configured via the root `Dockerfile` (`GET /api/health`).
+   - Coolify will mark the application as **Healthy** as soon as the Express server connects to PostgreSQL.
+
+7. **Deploy:**
+   - Click the **Deploy** button at the top right.
+   - Monitor the real-time deployment logs. Once the Vite SPA build completes, the server will start on port 3000.
+
+---
+
+#### 📦 Method B: Deploy via Coolify Docker Compose (All-in-One with Local PostgreSQL)
+
+If you want Coolify to spin up both GitForge and a dedicated local PostgreSQL database together:
+
+1. In Coolify, click **+ New Resource** > Select **Docker Compose**.
+2. Copy and paste the entire contents of [`docker-compose.selfhosted.yml`](docker-compose.selfhosted.yml) into the compose editor.
+3. In the environment variables section, specify:
+   ```env
+   APP_URL=https://gitforge.yourdomain.com
+   POSTGRES_USER=gitforge
+   POSTGRES_PASSWORD=your_strong_random_password
+   POSTGRES_DB=gitforge_db
+   ```
+4. Set the domains to `https://gitforge.yourdomain.com` routing to `gitforge:3000`.
+5. Click **Deploy**. Both PostgreSQL and GitForge containers will be built, interconnected, and started automatically.
+
+---
+
+#### ✅ Post-Deployment Verification:
+1. **Access User Portal:** Visit `https://gitforge.yourdomain.com` — the GitForge project manager and fleet orchestrator will load.
+2. **Setup Admin Console (`/vcon`):** Visit `https://gitforge.yourdomain.com/vcon` — if no admin user exists, you will be prompted with the **First-Time Master Admin Setup** wizard to create the root administrator credentials.
+3. **Verify Health Endpoint:** Visit `https://gitforge.yourdomain.com/api/health` — it will return:
+   ```json
+   {
+     "status": "healthy",
+     "service": "gitforge",
+     "uptime": 120,
+     "database": {
+       "status": "connected",
+       "latency_ms": 2
+     },
+     "version": "1.0.0"
+   }
+   ```
+
+---
+
+### Option 2: Docker Compose (Local VPS / Standalone Host)
+
+**Standard Deployment (with External Neon PostgreSQL):**
 ```bash
-# 1. Clone & enter repository
+# 1. Clone repository
 git clone https://github.com/your-username/gitforge.git
 cd gitforge
 
-# 2. Copy and configure .env
+# 2. Setup environment variables
 cp .env.example .env
-# Set your DATABASE_URL and APP_URL in .env
+# Edit .env and insert your DATABASE_URL and APP_URL
 
-# 3. Start GitForge container
+# 3. Build & start container
 docker compose up -d --build
 
-# 4. View logs and health
+# 4. Check status & logs
 docker compose logs -f
 ```
 
-**Full Standalone (GitForge + Local PostgreSQL container):**
+**Full Standalone Deployment (with Built-in PostgreSQL 16 container):**
 ```bash
+# Start both GitForge app and Postgres database container
 docker compose -f docker-compose.selfhosted.yml up -d --build
 ```
 
@@ -484,10 +574,11 @@ docker compose -f docker-compose.selfhosted.yml up -d --build
 
 ### Option 3: Standard Cloud Platforms (Cloud Run, Railway, Render, VPS)
 
-1. Set `DATABASE_URL`, `APP_URL`, and `PORT=3000` in your environment dashboard.
+1. Set `DATABASE_URL`, `APP_URL`, `NODE_ENV=production`, and `PORT=3000` in your platform's environment settings.
 2. Build command: `npm run build`
 3. Start command: `npm start`
 4. Expose Port: `3000`
+
 
 ---
 
