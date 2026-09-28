@@ -89,75 +89,75 @@ export const VconOverview: React.FC<VconOverviewProps> = ({
         {/* Projects */}
         <div
           onClick={() => onSelectTab('projects')}
-          className="bg-slate-900/90 border border-slate-800/80 hover:border-slate-700 p-2.5 rounded-lg cursor-pointer transition"
+          className="bg-slate-900/90 border border-slate-800/80 hover:border-slate-700 p-2 rounded-lg cursor-pointer transition"
         >
           <div className="flex items-center justify-between text-slate-400 mb-0.5">
             <span className="text-[10px] font-medium uppercase tracking-wider">Projects</span>
             <FolderGit2 className="w-3.5 h-3.5 text-orange-400" />
           </div>
-          <div className="text-base font-bold text-slate-200 font-mono">{counters.total_projects}</div>
+          <div className="text-sm font-bold text-slate-200 font-mono">{counters.total_projects}</div>
         </div>
 
         {/* CF Accounts */}
         <div
           onClick={() => onSelectTab('accounts')}
-          className="bg-slate-900/90 border border-slate-800/80 hover:border-slate-700 p-2.5 rounded-lg cursor-pointer transition"
+          className="bg-slate-900/90 border border-slate-800/80 hover:border-slate-700 p-2 rounded-lg cursor-pointer transition"
         >
           <div className="flex items-center justify-between text-slate-400 mb-0.5">
             <span className="text-[10px] font-medium uppercase tracking-wider">Accounts</span>
             <Cloud className="w-3.5 h-3.5 text-sky-400" />
           </div>
-          <div className="text-base font-bold text-slate-200 font-mono">{counters.total_accounts}</div>
+          <div className="text-sm font-bold text-slate-200 font-mono">{counters.total_accounts}</div>
         </div>
 
         {/* Live / Success */}
         <div
           onClick={() => onSelectTab('deployments')}
-          className="bg-slate-900/90 border border-slate-800/80 hover:border-slate-700 p-2.5 rounded-lg cursor-pointer transition"
+          className="bg-slate-900/90 border border-slate-800/80 hover:border-slate-700 p-2 rounded-lg cursor-pointer transition"
         >
           <div className="flex items-center justify-between text-slate-400 mb-0.5">
             <span className="text-[10px] font-medium uppercase tracking-wider">Live</span>
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400/90" />
           </div>
-          <div className="text-base font-bold text-emerald-400/90 font-mono">
-            {counters.success_deployments} <span className="text-[10px] text-slate-400">({successRate}%)</span>
+          <div className="text-sm font-bold text-emerald-400/90 font-mono">
+            {counters.success_deployments} <span className="text-[9px] text-slate-400 font-normal">({successRate}%)</span>
           </div>
         </div>
 
         {/* Active Builds */}
         <div
           onClick={() => onSelectTab('deployments')}
-          className="bg-slate-900/90 border border-slate-800/80 hover:border-slate-700 p-2.5 rounded-lg cursor-pointer transition"
+          className="bg-slate-900/90 border border-slate-800/80 hover:border-slate-700 p-2 rounded-lg cursor-pointer transition"
         >
           <div className="flex items-center justify-between text-slate-400 mb-0.5">
             <span className="text-[10px] font-medium uppercase tracking-wider">Active</span>
             <Clock className={`w-3.5 h-3.5 text-amber-400/90 ${active_builds > 0 ? 'animate-spin' : ''}`} />
           </div>
-          <div className="text-base font-bold text-amber-400/90 font-mono">{active_builds}</div>
+          <div className="text-sm font-bold text-amber-400/90 font-mono">{active_builds}</div>
         </div>
 
         {/* Errors */}
         <div
           onClick={() => onSelectTab('deployments')}
-          className="bg-slate-900/90 border border-slate-800/80 hover:border-slate-700 p-2.5 rounded-lg cursor-pointer transition"
+          className="bg-slate-900/90 border border-slate-800/80 hover:border-slate-700 p-2 rounded-lg cursor-pointer transition"
         >
           <div className="flex items-center justify-between text-slate-400 mb-0.5">
             <span className="text-[10px] font-medium uppercase tracking-wider">Errors</span>
             <AlertCircle className="w-3.5 h-3.5 text-rose-400/90" />
           </div>
-          <div className="text-base font-bold text-rose-400/90 font-mono">{counters.failed_deployments}</div>
+          <div className="text-sm font-bold text-rose-400/90 font-mono">{counters.failed_deployments}</div>
         </div>
 
         {/* DB Ping */}
         <div
           onClick={() => onSelectTab('database')}
-          className="bg-slate-900/90 border border-slate-800/80 hover:border-slate-700 p-2.5 rounded-lg cursor-pointer transition"
+          className="bg-slate-900/90 border border-slate-800/80 hover:border-slate-700 p-2 rounded-lg cursor-pointer transition"
         >
           <div className="flex items-center justify-between text-slate-400 mb-0.5">
             <span className="text-[10px] font-medium uppercase tracking-wider">DB Latency</span>
             <Database className="w-3.5 h-3.5 text-emerald-400/90" />
           </div>
-          <div className="text-base font-bold text-slate-200 font-mono">{db.latency_ms}ms</div>
+          <div className="text-sm font-bold text-slate-200 font-mono">{db.latency_ms}ms</div>
         </div>
       </div>
 

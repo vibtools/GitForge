@@ -1552,21 +1552,19 @@ export const ProjectWorkplaceView: React.FC<ProjectWorkplaceViewProps> = ({
 
         {/* TAB 4: DOMAIN MANAGEMENT & 1-CLICK CLOUDFLARE DNS AUTOMATION */}
         {activeTab === 'domain' && (
-          <div className="max-w-4xl mx-auto space-y-2.5 font-['Plus_Jakarta_Sans',sans-serif]">
+          <div className="max-w-4xl mx-auto space-y-2 font-['Plus_Jakarta_Sans',sans-serif]">
             {/* Main Automation Card */}
-            <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-2.5">
-              <div className="border-b border-slate-800 pb-2 flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded bg-emerald-950/80 border border-emerald-800 flex items-center justify-center text-emerald-400 shrink-0">
-                    <Globe className="w-3 h-3" />
+            <div className="bg-slate-900 border border-slate-800 rounded-lg p-2.5 space-y-2">
+              <div className="border-b border-slate-800 pb-1.5 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-4 h-4 rounded bg-emerald-950/80 border border-emerald-800 flex items-center justify-center text-emerald-400 shrink-0">
+                    <Globe className="w-2.5 h-2.5" />
                   </div>
-                  <div>
-                    <div className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
-                      <span>Cloudflare Domain & DNS Automation</span>
-                      <span className="text-[9px] font-mono bg-emerald-950 text-emerald-300 border border-emerald-800 px-1.5 py-0.2 rounded font-bold">
-                        {project.root_domain ? project.root_domain : 'pages.dev'}
-                      </span>
-                    </div>
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-100">
+                    <span>Domain & DNS</span>
+                    <span className="text-[9px] font-mono bg-emerald-950 text-emerald-300 border border-emerald-800 px-1.5 py-0.2 rounded font-bold">
+                      {project.root_domain ? project.root_domain : 'pages.dev'}
+                    </span>
                   </div>
                 </div>
 
@@ -1575,17 +1573,17 @@ export const ProjectWorkplaceView: React.FC<ProjectWorkplaceViewProps> = ({
                     type="button"
                     onClick={handleConnectOAuth}
                     disabled={isConnectingOAuth}
-                    className="px-2.5 py-0.5 text-[10px] font-semibold text-white bg-orange-600 hover:bg-orange-500 disabled:opacity-50 rounded transition flex items-center gap-1 shadow-xs cursor-pointer active:scale-95"
+                    className="px-2 py-0.5 text-[10px] font-semibold text-white bg-orange-600 hover:bg-orange-500 disabled:opacity-50 rounded transition flex items-center gap-1 shadow-xs cursor-pointer active:scale-95"
                     title={
                       isOAuthConfigured
-                        ? '1-Click Connect Cloudflare Account (OAuth 2.0 Ready)'
-                        : 'Connect Cloudflare Account (Configured in /vcon Settings)'
+                        ? 'Connect Cloudflare Account (1-Click OAuth)'
+                        : 'Connect Cloudflare Account'
                     }
                   >
                     <Cloud className="w-3 h-3" />
                     <span>{isConnectingOAuth ? 'Connecting...' : 'Connect Cloudflare'}</span>
                     {isOAuthConfigured && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="1-Click OAuth Active" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                     )}
                   </button>
 
@@ -1594,7 +1592,7 @@ export const ProjectWorkplaceView: React.FC<ProjectWorkplaceViewProps> = ({
                     onClick={fetchCloudflareZones}
                     disabled={isLoadingZones || accounts.length === 0}
                     className="p-1 text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-slate-700/80 rounded transition cursor-pointer"
-                    title="Refresh Cloudflare Zones list"
+                    title="Refresh Zones"
                   >
                     <RefreshCw className={`w-3 h-3 ${isLoadingZones ? 'animate-spin text-orange-400' : ''}`} />
                   </button>
@@ -1604,7 +1602,7 @@ export const ProjectWorkplaceView: React.FC<ProjectWorkplaceViewProps> = ({
                     onClick={handleVerifyDnsLive}
                     disabled={isVerifyingDns || !domainRoot}
                     className="px-2 py-0.5 text-[10px] font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded transition flex items-center gap-1 cursor-pointer"
-                    title="Query live Cloudflare DNS status"
+                    title="Verify live DNS status"
                   >
                     <Activity className={`w-3 h-3 ${isVerifyingDns ? 'animate-spin text-blue-400' : 'text-slate-400'}`} />
                     <span>{isVerifyingDns ? 'Checking...' : 'Verify DNS'}</span>
@@ -1616,13 +1614,13 @@ export const ProjectWorkplaceView: React.FC<ProjectWorkplaceViewProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-12 gap-2 text-[11px]">
                 {/* Cloudflare Detected Zones Dropdown */}
                 <div className="md:col-span-6 space-y-1">
-                  <div className="flex items-center justify-between text-slate-400">
+                  <div className="flex items-center justify-between text-slate-400 text-[10px]">
                     <label className="font-semibold text-slate-300 flex items-center gap-1">
                       <Cloud className="w-3 h-3 text-orange-400" />
-                      <span>Cloudflare Zone (Auto-Detected)</span>
+                      <span>Cloudflare Zone</span>
                     </label>
                     <span className="text-[9px] font-mono text-slate-500">
-                      {cfZones.length} zone{cfZones.length === 1 ? '' : 's'} available
+                      {cfZones.length} {cfZones.length === 1 ? 'zone' : 'zones'}
                     </span>
                   </div>
 
@@ -1639,7 +1637,7 @@ export const ProjectWorkplaceView: React.FC<ProjectWorkplaceViewProps> = ({
                       }}
                       className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 font-mono text-[11px] focus:outline-none focus:border-orange-500 cursor-pointer"
                     >
-                      <option value="">-- Select from your Cloudflare Zones --</option>
+                      <option value="">-- Select Zone --</option>
                       {cfZones.map((z) => (
                         <option key={z.id} value={z.id}>
                           {z.name} ({z.account.name || 'Account'} • {z.plan})
@@ -1648,7 +1646,7 @@ export const ProjectWorkplaceView: React.FC<ProjectWorkplaceViewProps> = ({
                     </select>
                   ) : (
                     <div className="bg-slate-950 border border-slate-800/80 rounded px-2.5 py-1 text-slate-400 font-mono text-[10px] flex items-center justify-between">
-                      <span>{accounts.length === 0 ? (isOAuthConfigured ? 'No CF accounts — click "Connect Cloudflare" above' : 'No CF accounts connected') : 'Click "Connect Cloudflare" or enter domain'}</span>
+                      <span>{accounts.length === 0 ? 'No CF accounts connected' : 'Select or enter domain below'}</span>
                       {accounts.length > 0 ? (
                         <button
                           type="button"
@@ -1672,7 +1670,7 @@ export const ProjectWorkplaceView: React.FC<ProjectWorkplaceViewProps> = ({
 
                 {/* Root Domain Input */}
                 <div className="md:col-span-3 space-y-1">
-                  <label className="block text-slate-300 font-semibold">Root Domain</label>
+                  <label className="block text-slate-300 font-semibold text-[10px]">Root Domain</label>
                   <div className="relative">
                     <Globe className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
                     <input
@@ -1682,7 +1680,6 @@ export const ProjectWorkplaceView: React.FC<ProjectWorkplaceViewProps> = ({
                       onChange={(e) => {
                         const val = e.target.value;
                         setDomainRoot(val);
-                        // Try matching with zones
                         const matched = cfZones.find((z) => z.name.toLowerCase() === val.trim().toLowerCase());
                         if (matched) {
                           setSelectedZoneId(matched.id);
@@ -1697,7 +1694,7 @@ export const ProjectWorkplaceView: React.FC<ProjectWorkplaceViewProps> = ({
 
                 {/* Subdomain Pattern */}
                 <div className="md:col-span-3 space-y-1">
-                  <label className="block text-slate-300 font-semibold">Subdomain Pattern</label>
+                  <label className="block text-slate-300 font-semibold text-[10px]">Pattern</label>
                   <input
                     type="text"
                     placeholder="site-{index}"
@@ -1709,7 +1706,7 @@ export const ProjectWorkplaceView: React.FC<ProjectWorkplaceViewProps> = ({
               </div>
 
               {/* Automation Toggles & 1-Click Provision Bar */}
-              <div className="bg-slate-950 border border-slate-800/90 rounded p-2 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+              <div className="bg-slate-950 border border-slate-800/90 rounded p-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px]">
                 <div className="flex flex-wrap items-center gap-3">
                   <label className="flex items-center gap-1.5 cursor-pointer text-slate-300 hover:text-white select-none">
                     <input
@@ -1719,8 +1716,8 @@ export const ProjectWorkplaceView: React.FC<ProjectWorkplaceViewProps> = ({
                       className="rounded bg-slate-900 border-slate-700 text-orange-600 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5"
                     />
                     <span className="flex items-center gap-1 font-mono text-[10px]">
-                      <span className={`w-2 h-2 rounded-full ${isProxied ? 'bg-orange-500 shadow-xs' : 'bg-slate-600'}`} />
-                      Cloudflare Proxy (Orange Cloud)
+                      <span className={`w-1.5 h-1.5 rounded-full ${isProxied ? 'bg-orange-500' : 'bg-slate-600'}`} />
+                      CF Proxy
                     </span>
                   </label>
 
@@ -1732,7 +1729,7 @@ export const ProjectWorkplaceView: React.FC<ProjectWorkplaceViewProps> = ({
                       className="rounded bg-slate-900 border-slate-700 text-orange-600 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5"
                     />
                     <span className="font-mono text-[10px] text-slate-400">
-                      Auto-Bind Subdomains to Pages ({accounts.length})
+                      Auto-bind Pages ({accounts.length})
                     </span>
                   </label>
                 </div>
@@ -1742,22 +1739,22 @@ export const ProjectWorkplaceView: React.FC<ProjectWorkplaceViewProps> = ({
                     type="button"
                     onClick={handleSaveDomain}
                     disabled={isSavingDomain}
-                    className="px-2.5 py-1 text-[10px] font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded transition flex items-center gap-1 cursor-pointer"
+                    className="px-2.5 py-0.5 text-[10px] font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded transition flex items-center gap-1 cursor-pointer"
                   >
                     <Save className="w-3 h-3" />
-                    <span>{isSavingDomain ? 'Saving...' : 'Save Settings'}</span>
+                    <span>{isSavingDomain ? 'Saving...' : 'Save'}</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={handleAutoProvisionDNS}
                     disabled={isAutoProvisioning || accounts.length === 0 || !domainRoot.trim()}
-                    className="px-3.5 py-1 text-[11px] font-semibold text-white bg-orange-600 hover:bg-orange-500 disabled:opacity-50 rounded transition flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95 font-mono"
+                    className="px-3 py-0.5 text-[10px] font-semibold text-white bg-orange-600 hover:bg-orange-500 disabled:opacity-50 rounded transition flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95 font-mono"
                   >
                     {isAutoProvisioning ? (
                       <>
                         <RotateCw className="w-3 h-3 animate-spin" />
-                        <span>Provisioning DNS...</span>
+                        <span>Provisioning...</span>
                       </>
                     ) : (
                       <>
@@ -1771,61 +1768,61 @@ export const ProjectWorkplaceView: React.FC<ProjectWorkplaceViewProps> = ({
 
               {/* Automation Result HUD Banner */}
               {autoProvisionReport && (
-                <div className="bg-emerald-950/60 border border-emerald-800/80 rounded p-2 space-y-1 font-mono text-[10px] animate-in fade-in">
+                <div className="bg-emerald-950/60 border border-emerald-800/80 rounded p-1.5 space-y-0.5 font-mono text-[9px] animate-in fade-in">
                   <div className="flex items-center justify-between text-emerald-300 font-bold">
-                    <div className="flex items-center gap-1.5">
-                      <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>DNS & Custom Domains Fully Automated!</span>
+                    <div className="flex items-center gap-1">
+                      <CheckCheck className="w-3 h-3 text-emerald-400" />
+                      <span>DNS Provisioned</span>
                     </div>
-                    <span className="text-[9px] bg-emerald-900 text-emerald-200 px-1.5 py-0.2 rounded">
+                    <span className="bg-emerald-900 text-emerald-200 px-1 py-0.1 rounded">
                       {autoProvisionReport.zone_name}
                     </span>
                   </div>
-                  <div className="text-slate-300 text-[9px] flex flex-wrap gap-x-3 gap-y-1 pt-0.5">
-                    <span>• Wildcard CNAME: <span className="text-emerald-400 font-bold">*.{autoProvisionReport.root_domain}</span> → {autoProvisionReport.wildcard_target}</span>
-                    <span>• Records Synced: <span className="text-sky-300 font-bold">{autoProvisionReport.provisioned_records?.length || 0}</span></span>
-                    <span>• Pages Bound: <span className="text-amber-300 font-bold">{autoProvisionReport.pages_bound_count || 0} accounts</span></span>
+                  <div className="text-slate-300 flex flex-wrap gap-x-2.5 gap-y-0.5 pt-0.5">
+                    <span>• CNAME: <span className="text-emerald-400 font-bold">*.{autoProvisionReport.root_domain}</span> → {autoProvisionReport.wildcard_target}</span>
+                    <span>• Synced: <span className="text-sky-300 font-bold">{autoProvisionReport.provisioned_records?.length || 0}</span></span>
+                    <span>• Pages Bound: <span className="text-amber-300 font-bold">{autoProvisionReport.pages_bound_count || 0}</span></span>
                   </div>
                 </div>
               )}
 
               {/* Live Verification Status Pill */}
               {dnsVerificationData && (
-                <div className="bg-slate-950 border border-slate-800 rounded p-2 flex items-center justify-between font-mono text-[10px]">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${dnsVerificationData.zone_found ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`} />
+                <div className="bg-slate-950 border border-slate-800 rounded px-2 py-1 flex items-center justify-between font-mono text-[10px]">
+                  <div className="flex items-center gap-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full ${dnsVerificationData.zone_found ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`} />
                     <span className="text-slate-300">
-                      Live DNS Status: <strong className={dnsVerificationData.zone_found ? 'text-emerald-400' : 'text-amber-400'}>{dnsVerificationData.zone_found ? 'Active & Verified' : 'Checking Propagation'}</strong>
+                      DNS Status: <strong className={dnsVerificationData.zone_found ? 'text-emerald-400' : 'text-amber-400'}>{dnsVerificationData.zone_found ? 'Active & Verified' : 'Propagating'}</strong>
                     </span>
-                    <span className="text-slate-500">
-                      ({dnsVerificationData.records?.length || 0} active records on Cloudflare)
+                    <span className="text-slate-500 text-[9px]">
+                      ({dnsVerificationData.records?.length || 0} records)
                     </span>
                   </div>
                   <span className="text-slate-500 text-[9px]">
-                    Verified: {new Date(dnsVerificationData.verified_at).toLocaleTimeString()}
+                    {new Date(dnsVerificationData.verified_at).toLocaleTimeString()}
                   </span>
                 </div>
               )}
             </div>
 
             {/* DNS Records & Subdomain Fleet Mapping */}
-            <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-2">
-              <div className="border-b border-slate-800 pb-1.5 flex items-center justify-between">
+            <div className="bg-slate-900 border border-slate-800 rounded-lg p-2.5 space-y-1.5">
+              <div className="border-b border-slate-800 pb-1 flex items-center justify-between">
                 <div className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
                   <Network className="w-3.5 h-3.5 text-sky-400" />
-                  <span>Configured DNS CNAME Records</span>
+                  <span>DNS Records</span>
                 </div>
 
-                <div className="flex items-center gap-2 text-[10px] font-mono text-slate-400">
-                  <span>Wildcard Routing: <strong className="text-emerald-400">Enabled</strong></span>
+                <div className="flex items-center gap-1.5 text-[9px] font-mono text-slate-400">
+                  <span>Wildcard: <strong className="text-emerald-400">Enabled</strong></span>
                   <span>•</span>
-                  <span>SSL: <strong className="text-emerald-400">Cloudflare Universal SSL</strong></span>
+                  <span>Universal SSL</span>
                 </div>
               </div>
 
               {/* Primary Wildcard Record */}
-              <div className="bg-slate-950 border border-slate-800 rounded p-2 space-y-1.5 text-[11px] font-mono">
-                <div className="grid grid-cols-12 gap-2 items-center text-[10px] text-slate-400 border-b border-slate-800/80 pb-1 uppercase font-bold">
+              <div className="bg-slate-950 border border-slate-800 rounded p-1.5 space-y-1 text-[11px] font-mono">
+                <div className="grid grid-cols-12 gap-1.5 items-center text-[9px] text-slate-400 border-b border-slate-800/80 pb-0.5 uppercase font-bold">
                   <div className="col-span-2">Type</div>
                   <div className="col-span-3">Host</div>
                   <div className="col-span-3">Target</div>
@@ -1833,9 +1830,9 @@ export const ProjectWorkplaceView: React.FC<ProjectWorkplaceViewProps> = ({
                   <div className="col-span-2 text-right">Action</div>
                 </div>
 
-                <div className="grid grid-cols-12 gap-2 items-center text-slate-200">
+                <div className="grid grid-cols-12 gap-1.5 items-center text-slate-200">
                   <div className="col-span-2">
-                    <span className="bg-blue-950 text-blue-300 border border-blue-800 px-1.5 py-0.2 rounded font-bold text-[9px]">
+                    <span className="bg-blue-950 text-blue-300 border border-blue-800 px-1 py-0.1 rounded font-bold text-[9px]">
                       CNAME
                     </span>
                   </div>
@@ -1846,8 +1843,8 @@ export const ProjectWorkplaceView: React.FC<ProjectWorkplaceViewProps> = ({
                     {primaryPagesTargetHost}
                   </div>
                   <div className="col-span-2 text-center">
-                    <span className="bg-orange-950/80 text-orange-400 border border-orange-800 px-1 py-0.2 rounded font-bold text-[8px] inline-flex items-center gap-1">
-                      <Cloud className="w-2.5 h-2.5 fill-current" />
+                    <span className="bg-orange-950/80 text-orange-400 border border-orange-800 px-1 py-0.1 rounded font-bold text-[8px] inline-flex items-center gap-0.5">
+                      <Cloud className="w-2 h-2 fill-current" />
                       <span>Proxied</span>
                     </span>
                   </div>
@@ -1860,12 +1857,12 @@ export const ProjectWorkplaceView: React.FC<ProjectWorkplaceViewProps> = ({
                           'wildcard_cname'
                         )
                       }
-                      className="px-2 py-0.5 text-[10px] text-slate-300 hover:text-white bg-slate-800 border border-slate-700 rounded transition inline-flex items-center gap-1 cursor-pointer"
+                      className="px-1.5 py-0.5 text-[9px] text-slate-300 hover:text-white bg-slate-800 border border-slate-700 rounded transition inline-flex items-center gap-1 cursor-pointer"
                     >
                       {copiedRecordKey === 'wildcard_cname' ? (
-                        <Check className="w-3 h-3 text-emerald-400" />
+                        <Check className="w-2.5 h-2.5 text-emerald-400" />
                       ) : (
-                        <Copy className="w-3 h-3" />
+                        <Copy className="w-2.5 h-2.5" />
                       )}
                       <span>Copy</span>
                     </button>
@@ -1875,27 +1872,24 @@ export const ProjectWorkplaceView: React.FC<ProjectWorkplaceViewProps> = ({
 
               {/* Connected Subdomain Fleet List */}
               {accounts.length > 0 && (
-                <div className="space-y-1 pt-1">
+                <div className="space-y-1 pt-0.5">
                   <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 pb-0.5">
                     <span className="font-bold text-slate-300">
-                      Connected Subdomains Fleet ({accounts.length})
-                    </span>
-                    <span className="text-[9px] text-slate-500">
-                      Auto-provisioned & routed to Cloudflare Pages
+                      Subdomains ({accounts.length})
                     </span>
                   </div>
 
-                  <div className="max-h-52 overflow-y-auto space-y-1">
+                  <div className="max-h-48 overflow-y-auto space-y-1">
                     {accounts.map((acc, idx) => {
                       const fullSubdomain = acc.custom_domain ? acc.custom_domain.replace(/^https?:\/\//, '') : `${acc.subdomain}.${project.root_domain || 'pages.dev'}`;
                       return (
                         <div
                           key={acc.id}
-                          className="bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 flex items-center justify-between text-[10px] font-mono hover:border-slate-700 transition"
+                          className="bg-slate-950 border border-slate-800 rounded px-2 py-1 flex items-center justify-between text-[10px] font-mono hover:border-slate-700 transition"
                         >
-                          <div className="flex items-center gap-2 truncate">
-                            <span className="text-slate-500 w-4">{idx + 1}.</span>
-                            <span className="font-bold text-slate-200 truncate max-w-[120px]">{acc.alias}</span>
+                          <div className="flex items-center gap-1.5 truncate">
+                            <span className="text-slate-500 w-3">{idx + 1}.</span>
+                            <span className="font-bold text-slate-200 truncate max-w-[110px]">{acc.alias}</span>
                             <span className="text-slate-600">→</span>
                             <span className="text-emerald-400 font-bold truncate">{fullSubdomain}</span>
                             <span className="bg-emerald-950/80 text-emerald-300 border border-emerald-800 px-1 py-0.1 rounded text-[8px] font-bold">
@@ -1903,12 +1897,12 @@ export const ProjectWorkplaceView: React.FC<ProjectWorkplaceViewProps> = ({
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-1.5 shrink-0">
+                          <div className="flex items-center gap-1 shrink-0">
                             <button
                               type="button"
                               onClick={() => copyToClipboard(fullSubdomain, `sub_${acc.id}`)}
-                              className="p-1 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded transition cursor-pointer"
-                              title="Copy Subdomain URL"
+                              className="p-0.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded transition cursor-pointer"
+                              title="Copy"
                             >
                               {copiedRecordKey === `sub_${acc.id}` ? (
                                 <Check className="w-3 h-3 text-emerald-400" />
@@ -1920,8 +1914,8 @@ export const ProjectWorkplaceView: React.FC<ProjectWorkplaceViewProps> = ({
                               href={`https://${fullSubdomain}`}
                               target="_blank"
                               rel="noreferrer"
-                              className="p-1 text-slate-400 hover:text-orange-400 hover:bg-slate-800 rounded transition"
-                              title="Open Live Subdomain in New Tab"
+                              className="p-0.5 text-slate-400 hover:text-orange-400 hover:bg-slate-800 rounded transition"
+                              title="Open"
                             >
                               <ExternalLink className="w-3 h-3" />
                             </a>
